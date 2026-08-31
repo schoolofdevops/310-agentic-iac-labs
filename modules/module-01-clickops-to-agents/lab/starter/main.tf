@@ -1,4 +1,4 @@
-## Lab 1: Format, Validate, and Scan a Terraform Module with Checkov
+## Lab 1: Getting Started with Agentic IaC
 ## Intent (read this like an agent would read a prompt):
 ##
 ##   "Give me a local nginx container for testing, serving a static page I control,
