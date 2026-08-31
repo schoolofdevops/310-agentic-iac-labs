@@ -94,7 +94,7 @@ Apply complete! Resources: 0 added, 0 changed, 1 destroyed.
 ```
 
 That's it. No pause, no confirmation beyond the usual `-auto-approve`, no record of why. An agent
-running unattended at a high autonomy rung with no gate would do exactly this, on your say-so or
+running unattended at a high autonomy step with no gate would do exactly this, on your say-so or
 on a misread intent, and there's nothing between the plan and the damage.
 
 **Restore** the `logs` block and re-apply, so you're back to two buckets before the next step.
