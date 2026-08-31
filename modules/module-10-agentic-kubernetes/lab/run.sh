@@ -16,7 +16,7 @@ echo "==> 2. crossplane v2 via real helm chart"
 helm repo add crossplane-stable https://charts.crossplane.io/stable >/dev/null 2>&1 || true
 helm repo update >/dev/null 2>&1
 kubectl create namespace crossplane-system >/dev/null 2>&1
-helm install crossplane crossplane-stable/crossplane --namespace crossplane-system --version 2.4.0 --wait --timeout 120s >/tmp/m10-helm.log 2>&1 || { cat /tmp/m10-helm.log; fail "crossplane install"; }
+helm install crossplane crossplane-stable/crossplane --namespace crossplane-system --version 2.4.0 --wait --timeout 300s >/tmp/m10-helm.log 2>&1 || { cat /tmp/m10-helm.log; fail "crossplane install"; }
 CP_VERSION=$(helm list -n crossplane-system -o json | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['app_version'])")
 [[ "$CP_VERSION" == 2.* ]] || fail "expected crossplane v2, got $CP_VERSION"
 echo "    ok, crossplane $CP_VERSION"
@@ -58,8 +58,12 @@ echo "    ok, XR Ready, composed ConfigMap has real patched data"
 
 echo "==> 6. numbered teardown: delete XR, then delete cluster"
 kubectl delete -f solution/xr.yaml >/dev/null || fail "xr delete"
-sleep 2
-kubectl get configmap checkout-service -n default >/dev/null 2>&1 && fail "composed configmap should have been garbage-collected"
+GC_DONE=0
+for i in $(seq 1 20); do
+  kubectl get configmap checkout-service -n default >/dev/null 2>&1 || { GC_DONE=1; break; }
+  sleep 2
+done
+[ "$GC_DONE" = "1" ] || fail "composed configmap should have been garbage-collected"
 kind delete cluster --name "$CLUSTER_NAME" >/dev/null 2>&1 || fail "cluster delete"
 docker ps -a --filter "name=$CLUSTER_NAME" --format '{{.Names}}' | grep -q "$CLUSTER_NAME" && fail "orphan cluster container remains"
 echo "    ok, XR and composed resource gone, cluster deleted, no orphans"
