@@ -210,7 +210,7 @@ A hook decides whether a proposed *change* is safe. A permission boundary decide
 can even touch in the first place, before a plan exists at all. In this repo that's a Claude Code
 settings file, not a Terraform concept:
 
-`file: .claude/settings.local.json`
+`file: .claude/settings.local.example.json`
 ```
 {
   "permissions": {
