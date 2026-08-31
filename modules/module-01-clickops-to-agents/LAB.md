@@ -317,6 +317,10 @@ in M02 is who is typing. You hand an agent this exact intent, it writes you this
 of file, and you read it line by line before you do anything else with it, that's Step 2 on
 the ladder, and it's where your agentic IaC workstation starts.
 
+Curious what a full run looks like, further down the road? `demos/m1-agent-preview/` in
+this repo has a real, verified example: an agent containerizing a small app, with real
+command output, not a mock-up. Nothing there is required for this lab.
+
 #### Exercise
 
 Write three lines, in your own words, in a file called `notes.md` next to your module:
