@@ -56,7 +56,6 @@ Intent: <paste the intent above>" --allowedTools ""
 
 `[ Expected output ]`
 ```
-```hcl
 terraform {
   required_providers {
     docker = {
@@ -101,7 +100,6 @@ resource "docker_container" "nginx" {
 output "url" {
   value = "http://127.0.0.1:8080"
 }
-```
 ```
 
 That's a real, captured response, not a mock. **Type** it into a file yourself, by hand,
