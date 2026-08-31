@@ -356,3 +356,14 @@ recognize the shape each time, because you just did it yourself.
 - sensitive variable, TF_VAR_
 - docker provider (terraform), local provider (terraform)
 - generate-verify-fix loop
+
+##### Re-verify
+
+`lab/run.sh` checks both `starter` and `solution` for real: starter must fail checkov on
+`CKV_SECRET_2`, solution must be clean. Run it whenever the pinned provider or checkov
+versions in this lab get bumped:
+
+```
+cd modules/module-01-clickops-to-agents/lab
+./run.sh
+```
