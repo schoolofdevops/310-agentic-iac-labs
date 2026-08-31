@@ -18,8 +18,8 @@ step it skips or gets wrong.
 docker info
 ```
 
-`If this hangs or errors, stop and fix Docker before continuing`. Everything below depends on
-Terraform being able to reach the Docker daemon, even though we never `apply`.
+If this hangs or errors, stop and fix Docker first. Everything below depends on Terraform
+being able to reach the Docker daemon, even though we never `apply`.
 
 ## The intent
 
@@ -215,7 +215,7 @@ The fix isn't to delete the feature. The log shipper is a real requirement. It's
 the key into the module. Pull the `default` out of the variable and mark it `sensitive`, so the
 value has to come from the environment instead:
 
-`file: ~/m01-lab/main.tf`
+`edit file: ~/m01-lab/main.tf`
 ```
 variable "log_shipper_key" {
   description = "AWS key for the sidecar that ships nginx access logs to S3. Set via TF_VAR_log_shipper_key, never a default."
@@ -242,9 +242,10 @@ there isn't one. `echo $?` is your real signal here, not the absence of red text
 M09 comes back to exactly this gap, on resources Checkov *does* know how to check, and the
 finding count there won't be zero.
 
-`If you want to see the container run, you can: terraform apply, then curl localhost:8080. Not
-required for this lab, and there's no destroy step because there's nothing to tear down: this lab
-never applies. That's Tier 0, everything stays on your machine, no cloud bill to go looking for.`
+If you want to see the container run, you can: `terraform apply`, then `curl localhost:8080`.
+Not required for this lab. There's no destroy step either, because there's nothing to tear
+down, this lab never applies. That's Tier 0: everything stays on your machine, no cloud bill
+to go looking for.
 
 #### Exercise
 
