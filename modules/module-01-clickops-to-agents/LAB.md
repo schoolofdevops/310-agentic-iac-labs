@@ -247,6 +247,76 @@ Not required for this lab. There's no destroy step either, because there's nothi
 down, this lab never applies. That's Tier 0: everything stays on your machine, no cloud bill
 to go looking for.
 
+## Preview: the same task, done by an agent
+
+Here's the whole point of doing this by hand first: so you recognize it when a machine does
+it. `lab/solution/main.tf` is not just your answer key. It is what a coding agent, working
+at **Step 2, draft**, would hand you for this exact intent, the same file, ready for you to
+read start to finish before anything runs.
+
+`file: lab/solution/main.tf`
+```
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.5"
+    }
+  }
+}
+
+provider "docker" {}
+
+variable "log_shipper_key" {
+  description = "AWS key for the sidecar that ships nginx access logs to S3. Set via TF_VAR_log_shipper_key, never a default."
+  type        = string
+  sensitive   = true
+}
+
+resource "local_file" "index_html" {
+  filename = "${path.module}/rendered/index.html"
+  content  = "<html><body><h1>Module 01 lab</h1></body></html>"
+}
+
+resource "local_file" "log_shipper_env" {
+  filename        = "${path.module}/rendered/log-shipper.env"
+  content         = "AWS_ACCESS_KEY_ID=${var.log_shipper_key}\n"
+  file_permission = "0600"
+}
+
+resource "docker_image" "nginx" {
+  name = "nginx:1.27-alpine"
+}
+
+resource "docker_container" "site" {
+  name  = "m01-lab-site"
+  image = docker_image.nginx.image_id
+
+  ports {
+    internal = 80
+    external = 8080
+  }
+
+  volumes {
+    host_path      = abspath(local_file.index_html.filename)
+    container_path = "/usr/share/nginx/html/index.html"
+    read_only      = true
+  }
+}
+```
+
+The loop an agent runs to get here is the same five steps you just ran by hand: read the
+intent, generate a draft, `fmt` and `validate` it, `plan` it, scan it. An agent hits the same
+checkov finding you did, for the same reason, reads the same error, and makes the same fix,
+pull the secret out, mark it `sensitive`. Nothing about that loop is different. What changes
+in M02 is who is typing. You hand an agent this exact intent, it writes you this exact kind
+of file, and you read it line by line before you do anything else with it, that's Step 2 on
+the ladder, and it's where your agentic IaC workstation starts.
+
 #### Exercise
 
 Write three lines, in your own words, in a file called `notes.md` next to your module:
