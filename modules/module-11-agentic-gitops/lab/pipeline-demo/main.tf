@@ -8,9 +8,9 @@ terraform {
 }
 
 variable "webhook_token" {
-  description = "Token for the pipeline's status webhook"
+  description = "Token for the pipeline's status webhook. Set via TF_VAR_webhook_token, never a default."
   type        = string
-  default     = "AKIAABCDEFGHIJKLMNOP"
+  sensitive   = true
 }
 
 resource "local_file" "pipeline_config" {
