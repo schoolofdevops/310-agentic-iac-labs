@@ -1,0 +1,14 @@
+Got both from Terraform MCP tools directly (no guessing).
+
+**Latest version** — `mcp__terraform__get_latest_provider_version(kreuzwerker/docker)` returned: **4.5.0**
+
+**`healthcheck` block top-level args** — `mcp__terraform__get_provider_details` (docs id 12586818, container resource, v4.5.0), nested schema for `healthcheck`, all Optional:
+
+- `interval` (String) — time between checks, `0s` default
+- `retries` (Number) — consecutive fails → unhealthy, default `0`
+- `start_interval` (String) — interval before healthcheck starts, default `0s`
+- `start_period` (String) — init grace period before retries count, default `0s`
+- `test` (List of String) — check command, e.g. `["CMD","curl","-f","localhost/health"]`
+- `timeout` (String) — max time per check, default `0s`
+
+Block itself: `Block List, Max: 1`.

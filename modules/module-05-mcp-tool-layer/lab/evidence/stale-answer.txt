@@ -1,0 +1,13 @@
+Memory only, confidence low on exact patch.
+
+**kreuzwerker/docker latest version**: ~v3.6.2 (best guess, not certain — could be off by minor/patch).
+
+**healthcheck block args** (docker_container resource):
+- `test` — list(string), cmd to run
+- `interval` — string, e.g. "30s"
+- `timeout` — string
+- `start_period` — string
+- `retries` — number
+- `start_interval` — string (newer field, later addition)
+
+Confidence: medium on field names, low on exact version number. Verify via registry before relying on it.
