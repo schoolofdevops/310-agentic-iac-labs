@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m11-gitops-demo
+  namespace: default
+data:
+  message: "reconciled by GitOps, not kubectl apply"
+  version: "v1"
