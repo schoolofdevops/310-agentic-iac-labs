@@ -1,11 +1,11 @@
-## Lab 1 — Be the agent
+## Lab 1: Format, Validate, and Scan a Terraform Module with Checkov
 ## Intent (read this like an agent would read a prompt):
 ##
 ##   "Give me a local nginx container for testing, serving a static page I control,
 ##   with its rendered HTML kept on disk so I can diff it in git. No secrets in the
 ##   container. I don't need it exposed outside this machine."
 ##
-## Write the module below by hand against that intent. Do not run terraform yet —
+## Write the module below by hand against that intent. Do not run terraform yet,
 ## get to `terraform fmt` first (LAB.md step 3).
 
 terraform {

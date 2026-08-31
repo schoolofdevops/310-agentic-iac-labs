@@ -1,4 +1,4 @@
-## Lab 1 — Be the agent — solution
+## Lab 1: Format, Validate, and Scan a Terraform Module with Checkov, solution
 ## Same intent as starter/main.tf. The fix: the key is no longer typed into the
 ## module. It is supplied at apply time from the environment and never touches disk
 ## in plaintext inside the repo.

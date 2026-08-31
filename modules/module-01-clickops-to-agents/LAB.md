@@ -1,4 +1,4 @@
-# Lab 1: Be the Agent
+# Lab 1: Format, Validate, and Scan a Terraform Module with Checkov
 
 **Tier 0** · ~12 min · no agent, no cloud account, no `terraform apply`. Just Terraform and
 Checkov, both already in the devcontainer.
