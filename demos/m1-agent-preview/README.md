@@ -29,3 +29,13 @@ curl http://localhost:5000/health
 curl http://localhost:5000/stats
 docker compose down -v
 ```
+
+## Re-verify
+
+```
+./run.sh
+```
+
+Exits non-zero on any failed criterion. Run it whenever the pinned versions in
+`Dockerfile`, `docker-compose.yml`, or `app/requirements.txt` get bumped, same discipline
+as `labs/shared/floci-spike/run.sh`.
