@@ -1,0 +1,8 @@
+apiVersion: platform.m10.example.org/v1alpha1
+kind: XAppConfig
+metadata:
+  name: checkout-service
+  namespace: default
+spec:
+  appName: checkout-service
+  environment: staging

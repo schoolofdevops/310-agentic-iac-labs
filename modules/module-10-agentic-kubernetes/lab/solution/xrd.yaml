@@ -1,0 +1,30 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xappconfigs.platform.m10.example.org
+spec:
+  scope: Namespaced
+  group: platform.m10.example.org
+  names:
+    kind: XAppConfig
+    plural: xappconfigs
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                appName:
+                  type: string
+                environment:
+                  type: string
+              required:
+                - appName
+                - environment
+          required:
+            - spec
