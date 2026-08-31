@@ -1,0 +1,15 @@
+# Tier 1 emulator. The docker.sock mount is REQUIRED — RDS and EC2 spawn real
+# backend containers, and without it aws_db_instance hangs indefinitely.
+services:
+  floci:
+    image: floci/floci:1.7.0
+    container_name: floci
+    ports:
+      - "4566:4566"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4566/_floci/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12

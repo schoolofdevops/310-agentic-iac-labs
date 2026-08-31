@@ -1,0 +1,283 @@
+# Lab 1: Be the Agent
+
+**Tier 0** · ~12 min · no agent, no cloud account, no `terraform apply`. Just Terraform and
+Checkov, both already in the devcontainer.
+
+Before you ever type a prompt at an agent, run its loop yourself. You're going to write a small
+Terraform module against a one-line intent, the kind of thing you'd hand an agent later in this
+course, then push it through the same generate-verify-fix cycle a machine would run. Feel the
+shape of it as a human now, and when M02 hands the same loop to an agent, you'll recognize every
+step it skips or gets wrong.
+
+## Pre Requisites
+
+- Nothing from a later module. `terraform` and `checkov` ship in the base devcontainer
+  image, and Docker is already reachable at `/var/run/docker.sock`. Check that with:
+
+```
+docker info
+```
+
+`If this hangs or errors, stop and fix Docker before continuing`. Everything below depends on
+Terraform being able to reach the Docker daemon, even though we never `apply`.
+
+## The intent
+
+Here's the one-line prompt. Read it the way an agent would, as the only instruction you get:
+
+> Give me a local nginx container for testing, serving a static page I control, with its
+> rendered HTML kept on disk so I can diff it in git. No secrets in the container. I don't
+> need it exposed outside this machine.
+
+## Get the starter module
+
+A skeleton is already written for you. This isn't a Terraform syntax course yet; it's a
+verification-loop course. **Copy** it into your own working directory:
+
+```
+cp -r modules/module-01-clickops-to-agents/lab/starter ~/m01-lab
+cd ~/m01-lab
+```
+
+`file: ~/m01-lab/main.tf`
+```
+terraform {
+  required_providers {
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.5"
+    }
+  }
+}
+
+provider "docker" {}
+
+# TODO: wire this into a real secrets manager once the course gets to M06 (guardrails).
+# For now, hardcoding it is the fastest way to unblock the log-shipping sidecar.
+variable "log_shipper_key" {
+  description = "AWS key for the sidecar that ships nginx access logs to S3"
+  type        = string
+  default     = "AKIAABCDEFGHIJKLMNOP"
+}
+
+resource "local_file" "index_html" {
+  filename = "${path.module}/rendered/index.html"
+  content  = "<html><body><h1>Module 01 lab</h1></body></html>"
+}
+
+resource "local_file" "log_shipper_env" {
+  filename = "${path.module}/rendered/log-shipper.env"
+  content  = "AWS_ACCESS_KEY_ID=${var.log_shipper_key}\n"
+}
+
+resource "docker_image" "nginx" {
+  name = "nginx:1.27-alpine"
+}
+
+resource "docker_container" "site" {
+  name  = "m01-lab-site"
+  image = docker_image.nginx.image_id
+
+  ports {
+    internal = 80
+    external = 8080
+  }
+
+  volumes {
+    host_path      = abspath(local_file.index_html.filename)
+    container_path = "/usr/share/nginx/html/index.html"
+    read_only      = true
+  }
+}
+```
+
+Read it against the intent above before you run anything. It's a fair reading of the prompt: a
+static page, kept on disk, a container that stays local. There's also a `log_shipper_key`
+variable that isn't part of the intent at all. Keep that in mind; you'll come back to it.
+
+## Check the syntax floor
+
+**Format** the module first. This is the cheapest check there is, and it says nothing about
+whether the code is good, only whether it's readable:
+
+```
+terraform fmt -diff
+```
+
+`[ Expected output ]`
+```
+```
+
+No output means no diff: the starter is already `fmt`-clean. Now **validate** it:
+
+```
+terraform init -backend=false
+terraform validate
+```
+
+`[ Expected output ]`
+```
+Success! The configuration is valid.
+```
+
+Valid and formatted only means Terraform can parse it. It says nothing about whether it's a good
+idea.
+
+## Read the plan
+
+**Plan** it, and actually read the output instead of skimming past it:
+
+```
+terraform plan
+```
+
+`[ Expected output ]`
+```
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # docker_container.site will be created
+  + resource "docker_container" "site" {
+      + name  = "m01-lab-site"
+      ...
+      + ports {
+          + external = 8080
+          + internal = 80
+        }
+      + volumes {
+          + container_path = "/usr/share/nginx/html/index.html"
+          + host_path      = ".../rendered/index.html"
+          + read_only      = true
+        }
+    }
+
+  # docker_image.nginx will be created
+  + resource "docker_image" "nginx" {
+      + name = "nginx:1.27-alpine"
+    }
+
+  # local_file.index_html will be created
+  + resource "local_file" "index_html" {
+      + content  = "<html><body><h1>Module 01 lab</h1></body></html>"
+      + filename = "./rendered/index.html"
+    }
+
+  # local_file.log_shipper_env will be created
+  + resource "local_file" "log_shipper_env" {
+      + content  = <<-EOT
+            AWS_ACCESS_KEY_ID=AKIAABCDEFGHIJKLMNOP
+        EOT
+      + filename = "./rendered/log-shipper.env"
+    }
+
+Plan: 4 to add, 0 to change, 0 to destroy.
+```
+
+Four resources, nothing destructive, nothing surprising. `terraform plan` will tell you a plaintext
+key is about to land in a file. If you were reading fast, this is the line you'd miss.
+
+## Run Checkov: it fails
+
+```
+checkov -d .
+```
+
+`[ Expected output ]`
+```
+secrets scan results:
+
+Passed checks: 0, Failed checks: 1, Skipped checks: 0
+
+Check: CKV_SECRET_2: "AWS Access Key"
+	FAILED for resource: abac545fc3bf803134bc8f78fb6160a5c6a87b26
+	File: /main.tf:31-32
+
+		31 |   default     = "AKIAA**********"
+```
+
+`Exit code 1`. Checkov's terraform policy set is mostly written for cloud resources; it has
+nothing to say about a `docker_container` or a `local_file` block on its own. What it *does*
+check, on every file, in every framework, is whether something that looks like a live credential
+is sitting in your source. It found one. That `TODO` comment in the starter file wasn't decoration.
+It's exactly the kind of shortcut an agent takes under time pressure, and exactly what a scanner
+is for.
+
+## Fix it, re-run, get to green
+
+The fix isn't to delete the feature. The log shipper is a real requirement. It's to stop typing
+the key into the module. Pull the `default` out of the variable and mark it `sensitive`, so the
+value has to come from the environment instead:
+
+`file: ~/m01-lab/main.tf`
+```
+variable "log_shipper_key" {
+  description = "AWS key for the sidecar that ships nginx access logs to S3. Set via TF_VAR_log_shipper_key, never a default."
+  type        = string
+  sensitive   = true
+}
+```
+
+Re-run the same scan:
+
+```
+checkov -d .
+```
+
+`[ Expected output ]`
+```
+Exit code: 0
+```
+
+Notice what you *don't* see: no "0 failed" summary line, nothing declared clean. Checkov only
+reports on checks it actually ran, and none of its built-in policies target `docker_container` or
+`local_file`. The only thing it could ever catch in this module was the literal secret, and now
+there isn't one. `echo $?` is your real signal here, not the absence of red text. Remember that:
+M09 comes back to exactly this gap, on resources Checkov *does* know how to check, and the
+finding count there won't be zero.
+
+`If you want to see the container run, you can: terraform apply, then curl localhost:8080. Not
+required for this lab, and there's no destroy step because there's nothing to tear down: this lab
+never applies. That's Tier 0, everything stays on your machine, no cloud bill to go looking for.`
+
+#### Exercise
+
+Write three lines, in your own words, in a file called `notes.md` next to your module:
+
+- Which of the steps you just ran (fmt, validate, plan, checkov, the fix) would you hand to a
+  machine without watching?
+- Which one would you still want to read yourself, every time?
+- Why that split?
+
+There's no wrong answer here. Keep the file: you'll compare it against your own answer again at
+the end of the course, in the capstone.
+
+#### Summary
+
+You just ran a generate-verify-fix loop by hand: write against an intent, check the syntax floor,
+read the plan, scan for what the plan doesn't tell you, fix, re-verify. Every later module in this
+course automates one more piece of what you just did manually. M02 hands the typing to an agent,
+M06 hands the gate a hook, M09 puts real cloud-shaped scanners in front of `apply`. You'll
+recognize the shape each time, because you just did it yourself.
+
+##### Reading List
+
+- [Checkov docs: secrets scanning](https://www.checkov.io/3.Custom%20Policies/Secrets%20Policies.html)
+- [Terraform: docker_container resource (kreuzwerker/docker)](https://registry.terraform.io/providers/kreuzwerker/docker/latest/docs/resources/container)
+- `reading/concepts.md` in this module: the four asymmetries between infrastructure and
+  application code, including why a leaked key in a `.tf` file is a worse class of mistake than
+  the same key in application code
+
+##### Search Keywords
+
+- terraform fmt, terraform validate, terraform plan
+- checkov, secrets scanning, CKV_SECRET_2
+- sensitive variable, TF_VAR_
+- docker provider (terraform), local provider (terraform)
+- generate-verify-fix loop
