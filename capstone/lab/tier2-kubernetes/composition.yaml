@@ -1,0 +1,38 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xappconfigs.platform.capstone.example.org
+spec:
+  compositeTypeRef:
+    apiVersion: platform.capstone.example.org/v1alpha1
+    kind: XAppConfig
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: app-configmap
+            base:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata: {}
+              data: {}
+            readinessChecks:
+              - type: None
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.appName
+                toFieldPath: data.appName
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.environment
+                toFieldPath: data.environment

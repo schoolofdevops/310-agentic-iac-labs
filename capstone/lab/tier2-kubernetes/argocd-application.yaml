@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: capstone-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/schoolofdevops/310-agentic-iac-labs.git
+    targetRevision: main
+    path: capstone/lab/pipeline-demo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
