@@ -1,0 +1,25 @@
+name: Capstone Tier 2 XR validation
+
+on:
+  pull_request:
+    paths:
+      - "capstone/lab/pipeline-demo/**"
+
+jobs:
+  validate-xr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate XAppConfig against required fields
+        run: |
+          python3 - <<'EOF'
+          import sys, yaml
+          d = yaml.safe_load(open("capstone/lab/pipeline-demo/xr.yaml"))
+          spec = d.get("spec", {})
+          required = ["appName", "environment"]
+          missing = [f for f in required if f not in spec]
+          if missing:
+              print(f"FAIL: xr.yaml missing required spec field(s): {missing}")
+              sys.exit(1)
+          print("OK: xr.yaml has all required fields")
+          EOF

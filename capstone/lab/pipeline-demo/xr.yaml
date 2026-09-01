@@ -1,0 +1,7 @@
+apiVersion: platform.capstone.example.org/v1alpha1
+kind: XAppConfig
+metadata:
+  name: capstone-app
+  namespace: default
+spec:
+  appName: capstone-app
