@@ -1,0 +1,6 @@
+apiVersion: v2
+name: postgres-db
+description: A single-tenant Postgres instance, the packaged form of lab/manifests/
+type: application
+version: 0.1.0
+appVersion: "16-alpine"

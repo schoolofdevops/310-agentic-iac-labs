@@ -1,10 +1,15 @@
-# Lab 10: Stand Up a Cluster, Install Crossplane v2, Request a Namespaced XR
+# Lab 10: Build a Database-as-a-Service Capability with Helm, Manifests, and Crossplane v2
 
-**Tier 2** · ~25 min · a real `kind` cluster, real Helm 4, real Crossplane v2. Docker already
-required, same as every Tier 1 lab in this course. Numbered teardown at the end.
+**Tier 2** · ~45 min · a real `kind` cluster, real Helm 4, real Crossplane v2, a real Postgres
+database delivered three different ways. Docker already required, same as every Tier 1 lab in
+this course. Numbered teardown at the end.
 
 Everything up to this module ran against Terraform. This lab is the same discipline, propose,
-read the diff, apply, on a different substrate: a real Kubernetes control plane.
+read the diff, apply, on a different substrate: a real Kubernetes control plane. PART I is a
+short warm-up with Crossplane's mechanics. PART II is the real build: the same database
+capability, delivered three ways, each a step up in how self-service it is. No Backstage, no
+catalog UI, this stays at the level a platform team actually operates: charts, manifests, and
+Kubernetes-native custom resources.
 
 ## Pre Requisites
 
@@ -18,12 +23,6 @@ docker info
 ```
 
 If `docker info` hangs or errors, stop and fix Docker first, same as every earlier Tier 1 lab.
-
-## The intent
-
-> Give me a namespaced platform resource, `XAppConfig`, that a team can request directly, in
-> their own namespace, no separate claim object. Requesting one should compose a real
-> `ConfigMap` carrying the app name and environment. Crossplane v2, node image pinned by digest.
 
 ## Start the cluster
 
@@ -71,14 +70,19 @@ That digest in the config isn't decoration. Run `docker pull kindest/node:v1.31.
 and read the `Digest:` line it prints, it's the same one. `latest` and even a version tag can
 move under you; a digest can't.
 
+`kind` runs each cluster on its own `kubectl` context (`kind-m10-lab`). If you're running other
+labs or clusters in parallel, pin every command in this lab to `--context kind-m10-lab`, don't
+rely on whichever context happened to be current, another tool switching context out from under
+you is a real, sharp-edged failure mode, not a hypothetical.
+
 ## Install Crossplane v2
 
 ```
 helm repo add crossplane-stable https://charts.crossplane.io/stable
 helm repo update
-kubectl create namespace crossplane-system
+kubectl --context kind-m10-lab create namespace crossplane-system
 helm install crossplane crossplane-stable/crossplane \
-  --namespace crossplane-system --version 2.4.0 --wait --timeout 120s
+  --kube-context kind-m10-lab --namespace crossplane-system --version 2.4.0 --wait --timeout 300s
 ```
 
 `[ Expected output ]`
@@ -90,6 +94,11 @@ STATUS: deployed
 Chart Version: 2.4.0
 Chart Application Version: 2.4.0
 ```
+
+`--timeout 300s`, not the 120s you'll see in some Crossplane docs. On a cold cache the
+`crossplane` and `crossplane-rbac-manager` images alone can take past two minutes to pull.
+Time out too early and `helm` reports the release `failed` even though the pods come up fine a
+minute later, a real false negative this lab hit while being built.
 
 **Confirm** it's really v2, not v1, before doing anything else:
 
@@ -106,7 +115,7 @@ Crossplane v2 compositions run as a pipeline of functions. This lab uses one:
 
 `edit file: (apply directly, no local file needed)`
 ```
-kubectl apply -f - <<'EOF'
+kubectl --context kind-m10-lab apply -f - <<'EOF'
 apiVersion: pkg.crossplane.io/v1
 kind: Function
 metadata:
@@ -119,7 +128,7 @@ EOF
 **Wait** for it to report healthy:
 
 ```
-kubectl get functions.pkg.crossplane.io
+kubectl --context kind-m10-lab get functions.pkg.crossplane.io
 ```
 
 `[ Expected output ]`
@@ -128,7 +137,10 @@ NAME                            INSTALLED   HEALTHY   PACKAGE
 function-patch-and-transform    True        True      xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.9.0
 ```
 
-## Write the XRD and Composition
+## PART I: warm-up, a namespaced XR with no claim object
+
+Before building a real database, request something trivial, a `ConfigMap`, so you can see
+Crossplane v2's shape without a real workload's failure modes in the way.
 
 `file: lab/solution/xrd.yaml`
 ```
@@ -208,46 +220,22 @@ spec:
 
 `readinessChecks: [{type: None}]` matters here: a plain `ConfigMap` carries no status
 condition Crossplane can watch, so without this the XR sits stuck at `READY False` forever,
-waiting for a signal that will never come. Leave it out and re-run the next step to see
-that for yourself.
+waiting for a signal that will never come. Hold that thought, PART II hits the same wall for a
+different, more interesting reason.
 
-**Apply** both:
-
-```
-kubectl apply -f lab/solution/xrd.yaml
-kubectl apply -f lab/solution/composition.yaml
-```
-
-## Request the XR, no claim object
-
-`file: lab/solution/xr.yaml`
-```
-apiVersion: platform.m10.example.org/v1alpha1
-kind: XAppConfig
-metadata:
-  name: checkout-service
-  namespace: default
-spec:
-  appName: checkout-service
-  environment: staging
-```
-
-Read this the way you'd read a `terraform plan`, before applying it:
+**Apply** both, request the XR, no claim object:
 
 ```
-kubectl diff -f lab/solution/xr.yaml
+kubectl --context kind-m10-lab apply -f lab/solution/xrd.yaml
+kubectl --context kind-m10-lab apply -f lab/solution/composition.yaml
+kubectl --context kind-m10-lab apply -f lab/solution/xr.yaml
 ```
 
-**Apply** it:
+**Verify** it goes `Ready`, then read the composed `ConfigMap`:
 
 ```
-kubectl apply -f lab/solution/xr.yaml
-```
-
-**Verify** it goes `Ready`:
-
-```
-kubectl get xappconfig checkout-service -n default
+kubectl --context kind-m10-lab get xappconfig checkout-service -n default
+kubectl --context kind-m10-lab get configmap checkout-service -n default -o yaml
 ```
 
 `[ Expected output ]`
@@ -256,52 +244,372 @@ NAME               SYNCED   READY   COMPOSITION                            AGE
 checkout-service   True     True    xappconfigs.platform.m10.example.org   43s
 ```
 
-**Confirm** the composed `ConfigMap` carries the real patched values:
+Delete the XR before moving on, PART II reuses this cluster:
 
 ```
-kubectl get configmap checkout-service -n default -o yaml
+kubectl --context kind-m10-lab delete -f lab/solution/xr.yaml
+```
+
+## PART II: the real capability, a database, delivered three ways
+
+A platform team's actual job is rarely "write one YAML file." It's "give every team a
+self-service way to get a database, at whatever level of hand-holding that team needs." Some
+teams want the raw manifests to read and tweak. Some want a chart with sane defaults. Some just
+want to ask for a database and get one. Build all three, on the same underlying Postgres, so you
+can see exactly what each layer buys you over the one below it.
+
+### Layer 1: raw manifests, the hard way
+
+This is what every layer above eventually resolves to. Write it once, understand it, and every
+abstraction after this is honest about what it's hiding.
+
+`file: lab/manifests/postgres-secret.yaml`
+```
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-creds
+  namespace: dbaas-manual
+type: Opaque
+stringData:
+  POSTGRES_USER: appuser
+  POSTGRES_PASSWORD: lab-only-not-a-real-secret
+  POSTGRES_DB: appdb
+```
+
+`file: lab/manifests/postgres-statefulset.yaml`
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: dbaas-manual
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports: [{ containerPort: 5432 }]
+          envFrom: [{ secretRef: { name: postgres-creds } }]
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data, subPath: pgdata }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "appuser", "-d", "appdb"] }
+            initialDelaySeconds: 5
+            periodSeconds: 3
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: 512Mi } }
+```
+
+`where,` the `subPath: pgdata` on the volume mount matters more than it looks. Postgres refuses
+to initialize `PGDATA` on a directory that already has a `lost+found` folder in it, which some
+CSI drivers create at the volume root. Mounting a subdirectory sidesteps that entirely.
+
+`file: lab/manifests/postgres-service.yaml`
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: dbaas-manual
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
+  clusterIP: None
+```
+
+**Apply** and **wait** for real readiness, not a fixed sleep:
+
+```
+kubectl --context kind-m10-lab create namespace dbaas-manual
+kubectl --context kind-m10-lab apply -f lab/manifests/postgres-secret.yaml \
+  -f lab/manifests/postgres-service.yaml -f lab/manifests/postgres-statefulset.yaml
+kubectl --context kind-m10-lab -n dbaas-manual rollout status statefulset/postgres --timeout=120s
+```
+
+**Confirm** it's a real, connectable database:
+
+```
+kubectl --context kind-m10-lab -n dbaas-manual exec postgres-0 -- \
+  psql -U appuser -d appdb -c "SELECT 1 AS real_query;"
 ```
 
 `[ Expected output ]`
 ```
-data:
-  appName: checkout-service
-  environment: staging
-kind: ConfigMap
-metadata:
-  name: checkout-service
-  namespace: default
-  ownerReferences:
-  - apiVersion: platform.m10.example.org/v1alpha1
-    controller: true
-    kind: XAppConfig
-    name: checkout-service
+ real_query
+------------
+          1
+(1 row)
 ```
 
-That `ownerReferences` block is doing real work, not just bookkeeping. It's what makes the
-next step possible.
+### Layer 2: the same manifests, packaged as a Helm chart
+
+Every field you just hardcoded (`appdb`, `appuser`, `512Mi`) becomes a value. This is the exact
+same Postgres, now installable by anyone on the team without reading or editing YAML.
+
+`file: lab/charts/postgres-db/values.yaml`
+```
+dbName: appdb
+dbUser: appuser
+dbPassword: lab-only-not-a-real-secret
+storageSize: 512Mi
+image: postgres:16-alpine
+```
+
+`file: lab/charts/postgres-db/templates/statefulset.yaml` (excerpt)
+```
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "{{ .Values.dbUser }}", "-d", "{{ .Values.dbName }}"]
+```
+
+The full chart is in `lab/charts/postgres-db/`, three templates plus `Chart.yaml` and
+`values.yaml`, read them, they're the layer-1 manifests with every hardcoded value swapped for
+a `{{ .Values.* }}` reference.
+
+**Install** a second, independent instance, this time for a real named team database:
+
+```
+helm install billing-db ./lab/charts/postgres-db -n dbaas-helm --create-namespace \
+  --set dbName=billing_service --wait --timeout 90s
+```
+
+**Verify** it's a genuinely separate database:
+
+```
+kubectl --context kind-m10-lab -n dbaas-helm exec billing-db-postgres-0 -- \
+  psql -U appuser -d billing_service -c "SELECT current_database();"
+```
+
+`[ Expected output ]`
+```
+ current_database
+------------------
+ billing_service
+(1 row)
+```
+
+`helm list -n dbaas-helm` shows a real release, `helm uninstall billing-db -n dbaas-helm`
+would take the whole thing back out, one command, no hunting for which manifests belong
+together.
+
+### Layer 3: a namespaced Crossplane XR, no Helm values, no claim
+
+A chart is still something a human has to know exists and know the right flags for. The last
+layer turns "give me a database" into one small Kubernetes object, the same discipline the
+warm-up used, applied to something that actually matters.
+
+`file: lab/solution/db-xrd.yaml`
+```
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatabases.platform.m10.example.org
+spec:
+  scope: Namespaced
+  group: platform.m10.example.org
+  names:
+    kind: XDatabase
+    plural: xdatabases
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                dbName: { type: string }
+                storageSize: { type: string, default: 512Mi }
+              required: [dbName]
+          required: [spec]
+```
+
+The Composition, `lab/solution/db-composition.yaml`, patches-and-transforms the same three
+objects layer 1 wrote by hand, a `Secret`, a headless `Service`, and a `StatefulSet`, from one
+`XDatabase` request. It's long, read the full file, but here's the one line worth stopping on:
+
+```
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres-creds"
+```
+
+`string.type: Format` is required on every string transform in this function version. Leave it
+out and the whole pipeline step fails with `invalid Function input:
+resources[0].patches[1].transforms[0].string.type: Required value`, the kind of error message
+that only makes sense once you already know the field is required. This lab hit that for real
+while being built, along with two more, worth walking through because they're the kind of thing
+no tutorial mentions and every real Crossplane rollout eventually hits:
+
+**Composing a built-in Kubernetes kind needs its own RBAC.** Crossplane's default `crossplane`
+`ClusterRole` grants `get/list/create` on `apps/deployments`, and nothing at all on
+`apps/statefulsets`. A `Secret` and a `Service` composed fine; the `StatefulSet` failed with
+`cannot get existing composed resource: Timeout: failed waiting for *unstructured.Unstructured
+Informer to sync`, an error that reads like a caching problem and is actually a permissions
+problem. The fix is `lab/solution/db-composer-rbac.yaml`, a small `ClusterRole` granting the
+`crossplane` `ServiceAccount` full CRUD on `apps/statefulsets`, bound with a
+`ClusterRoleBinding`. Unlike a Terraform provider, which authenticates to a cloud API with its
+own credentials, Crossplane composing a native Kubernetes object acts as itself, so it needs
+its own grant for exactly what it composes.
+
+**A `StatefulSet`'s own readiness can't be read the obvious way.** The first fix attempt used
+`readinessChecks: [{type: MatchCondition, matchCondition: {type: Ready, status: "True"}}]`,
+copying the pattern a `Deployment` or a claim-backed resource would use. `StatefulSet` doesn't
+carry a `status.conditions[type=Ready]` field at all, only `status.readyReplicas`. The second
+attempt, `MatchInteger` against `status.readyReplicas`, looked right and still failed:
+`cannot run readiness check at index 0: status.readyReplicas: not a (int64) number`, a real
+bug in how this function version parses numbers off unstructured JSON. The actual fix,
+matching the warm-up's own `ConfigMap` lesson from PART I: `type: None`, and verify real
+readiness the same way you'd verify any Kubernetes workload, `kubectl get statefulset` or a
+real query against the pod, not a status field Crossplane can watch. Three real attempts, one
+root cause each time, the third one a workaround rather than a fix, because the underlying
+function bug isn't yours to patch.
+
+**Apply** both:
+
+```
+kubectl --context kind-m10-lab apply -f lab/solution/db-xrd.yaml
+kubectl --context kind-m10-lab apply -f lab/solution/db-composer-rbac.yaml
+kubectl --context kind-m10-lab apply -f lab/solution/db-composition.yaml
+```
+
+`file: lab/solution/db-xr.yaml`
+```
+apiVersion: platform.m10.example.org/v1alpha1
+kind: XDatabase
+metadata:
+  name: billing
+  namespace: default
+spec:
+  dbName: billing_service
+  storageSize: 1Gi
+```
+
+**Read the diff, then apply**, the same discipline every module in this course has used since
+`terraform plan`:
+
+```
+kubectl --context kind-m10-lab diff -f lab/solution/db-xr.yaml
+kubectl --context kind-m10-lab apply -f lab/solution/db-xr.yaml
+```
+
+**Verify** it goes `Synced` and `Ready`, then confirm the composed database is real:
+
+```
+kubectl --context kind-m10-lab get xdatabase billing -n default
+kubectl --context kind-m10-lab -n default exec billing-postgres-0 -- \
+  psql -U appuser -d billing_service -c "SELECT current_database();"
+```
+
+`[ Expected output ]`
+```
+NAME      SYNCED   READY   COMPOSITION                            AGE
+billing   True     True    xdatabases.platform.m10.example.org    14m
+
+ current_database
+------------------
+ billing_service
+(1 row)
+```
+
+## The agentic angle: an agent proposes the request, you approve it
+
+A team doesn't write YAML by reading an XRD's OpenAPI schema by hand every time, an agent that
+already knows this repo can. Ask Claude Code to propose a second database, for a different
+team, reading only the schema you already applied:
+
+```
+claude -p "Read lab/solution/db-xrd.yaml to learn the XDatabase schema (apiVersion \
+platform.m10.example.org/v1alpha1, spec.dbName required, spec.storageSize optional). Write a \
+new file at lab/requests/analytics-xr.yaml requesting a namespaced XDatabase named \
+analytics-db in namespace default, for a team that needs a 2Gi analytics database called \
+analytics_events. Only write that one file." \
+  --permission-mode acceptEdits --allowedTools "Read,Write"
+```
+
+`[ Expected output ]`
+```
+File wrote: `lab/requests/analytics-xr.yaml`.
+```
+
+`file: lab/requests/analytics-xr.yaml` (agent-generated, real, captured from this exact run)
+```
+apiVersion: platform.m10.example.org/v1alpha1
+kind: XDatabase
+metadata:
+  name: analytics-db
+  namespace: default
+spec:
+  dbName: analytics_events
+  storageSize: 2Gi
+```
+
+The agent proposed a file. It didn't apply anything, `--allowedTools "Read,Write"` doesn't
+include `Bash`, the agent has no path to `kubectl` at all here. Read the diff yourself, the
+same gate every module in this course has used, then apply it yourself:
+
+```
+kubectl --context kind-m10-lab diff -f lab/requests/analytics-xr.yaml
+kubectl --context kind-m10-lab apply -f lab/requests/analytics-xr.yaml
+kubectl --context kind-m10-lab get xdatabase analytics-db -n default
+```
+
+`[ Expected output ]`
+```
+NAME           SYNCED   READY   COMPOSITION                            AGE
+analytics-db   True     True    xdatabases.platform.m10.example.org    4s
+```
+
+Ready in 4 seconds this time, not 14 minutes. The RBAC grant and the function pod were already
+warm from the first request, real evidence that most of what felt slow above was one-time setup
+cost, not a property of the platform itself.
 
 ## Teardown
 
-**1. Delete the XR:**
+**1. Delete both XRs**, confirm the composed resources are garbage-collected via their owner
+references, no manual cleanup needed:
 
 ```
-kubectl delete -f lab/solution/xr.yaml
-```
-
-**Confirm** the composed `ConfigMap` went with it, garbage-collected via the owner reference
-above, no manual cleanup needed:
-
-```
-kubectl get configmap checkout-service -n default
+kubectl --context kind-m10-lab delete -f lab/requests/analytics-xr.yaml
+kubectl --context kind-m10-lab delete -f lab/solution/db-xr.yaml
+kubectl --context kind-m10-lab -n default get statefulset,secret,svc
 ```
 
 `[ Expected output ]`
 ```
-Error from server (NotFound): configmaps "checkout-service" not found
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   23m
 ```
 
-**2. Delete the cluster:**
+Only the cluster's own `kubernetes` service is left. Both databases, and everything Crossplane
+composed for them, are gone.
+
+**2. Uninstall the Helm release:**
+
+```
+helm uninstall billing-db -n dbaas-helm
+```
+
+**3. Delete the cluster:**
 
 ```
 kind delete cluster --name m10-lab
@@ -323,31 +631,36 @@ Empty output means clean.
 
 #### Exercise
 
-Change `readinessChecks` back to the default (delete that block entirely from
-`composition.yaml`), re-apply, and request a second XR. Watch it stay `READY False`
-indefinitely. Explain, in your own words, why a plain `ConfigMap` needs an explicit
-`type: None` readiness check and a resource with its own status conditions usually
-wouldn't.
+Layer 1's manifests hardcode `POSTGRES_DB: appdb`. Write a second raw-manifest instance for a
+team that wants a database called `inventory`, without touching the Helm chart or Crossplane at
+all. What do you have to rename by hand to avoid colliding with the first instance, and how many
+of those renames does the Helm chart handle for you automatically?
 
 #### Summary
 
-You ran the exact same discipline this course has used since module one, propose, read the
-diff, gate the apply, on a real Kubernetes cluster instead of Terraform. `kind` gave you a
-real control plane pinned by digest. Crossplane v2 turned a namespaced XR into a real
-composed resource, no claim object in the way. M11 picks this cluster back up and puts a
-GitOps controller in front of it.
+You built one capability, a real Postgres database, three ways: raw manifests you can read
+end to end, a Helm chart anyone on the team can install without touching YAML, and a namespaced
+Crossplane XR that turns the whole thing into a five-line request. Along the way you hit three
+real Crossplane failures, a missing transform field, a missing RBAC grant, and a readiness
+check that doesn't apply to a `StatefulSet`, and fixed each one for a real, specific reason, not
+by guessing. `kubectl diff` played the same role `terraform plan` has played since module one,
+read the change before it lands. M11 picks this same cluster back up and puts a GitOps
+controller in front of it, so an agent proposing a change goes through a pull request and a
+review before anything reaches this cluster at all.
 
 ##### Reading List
 
 - [kind: node image documentation](https://kind.sigs.k8s.io/docs/user/quick-start/)
 - [Crossplane v2: composite resources](https://docs.crossplane.io/latest/concepts/composite-resources/)
+- [Helm chart template guide](https://helm.sh/docs/chart_template_guide/)
 - `reading/concepts.md` in this module: why Crossplane v2 removed claims, and what a
   namespace boundary now does instead
 
 ##### Search Keywords
 
 - kind, node image digest, kindest/node
-- helm 4, helm install, crossplane-stable
+- helm 4, helm install, helm chart, values.yaml, templates
 - crossplane v2, XRD, Composition, XR, namespaced composite resource
-- function-patch-and-transform, readinessChecks
-- kubectl diff, reconcile loop
+- function-patch-and-transform, readinessChecks, string.type Format
+- ClusterRole, ClusterRoleBinding, composed resource RBAC
+- kubectl diff, reconcile loop, database-as-a-service

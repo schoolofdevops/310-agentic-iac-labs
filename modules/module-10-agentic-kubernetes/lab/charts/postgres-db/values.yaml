@@ -1,0 +1,12 @@
+dbName: appdb
+dbUser: appuser
+dbPassword: lab-only-not-a-real-secret
+storageSize: 512Mi
+image: postgres:16-alpine
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi

@@ -1,0 +1,162 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xdatabases.platform.m10.example.org
+spec:
+  compositeTypeRef:
+    apiVersion: platform.m10.example.org/v1alpha1
+    kind: XDatabase
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: db-secret
+            base:
+              apiVersion: v1
+              kind: Secret
+              metadata: {}
+              type: Opaque
+              stringData:
+                POSTGRES_USER: appuser
+                POSTGRES_PASSWORD: lab-only-not-a-real-secret
+            readinessChecks:
+              - type: None
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres-creds"
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.dbName
+                toFieldPath: stringData.POSTGRES_DB
+          - name: db-service
+            base:
+              apiVersion: v1
+              kind: Service
+              metadata: {}
+              spec:
+                clusterIP: None
+                ports:
+                  - port: 5432
+                    targetPort: 5432
+            readinessChecks:
+              - type: None
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.selector.app
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres"
+          - name: db-statefulset
+            base:
+              apiVersion: apps/v1
+              kind: StatefulSet
+              metadata: {}
+              spec:
+                replicas: 1
+                template:
+                  spec:
+                    containers:
+                      - name: postgres
+                        image: postgres:16-alpine
+                        ports:
+                          - containerPort: 5432
+                        volumeMounts:
+                          - name: data
+                            mountPath: /var/lib/postgresql/data
+                            subPath: pgdata
+                        readinessProbe:
+                          exec:
+                            command: ["pg_isready", "-U", "appuser"]
+                          initialDelaySeconds: 5
+                          periodSeconds: 3
+                        envFrom:
+                          - secretRef:
+                              name: placeholder
+                volumeClaimTemplates:
+                  - metadata:
+                      name: data
+                    spec:
+                      accessModes: ["ReadWriteOnce"]
+                      resources:
+                        requests:
+                          storage: 512Mi
+            connectionDetails:
+              - type: FromValue
+                name: ready
+                value: "true"
+            readinessChecks:
+              - type: None
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.serviceName
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.selector.matchLabels.app
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.template.metadata.labels.app
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.template.spec.containers[0].envFrom[0].secretRef.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres-creds"
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.storageSize
+                toFieldPath: spec.volumeClaimTemplates[0].spec.resources.requests.storage

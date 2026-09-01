@@ -1,0 +1,28 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatabases.platform.m10.example.org
+spec:
+  scope: Namespaced
+  group: platform.m10.example.org
+  names:
+    kind: XDatabase
+    plural: xdatabases
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                dbName:
+                  type: string
+                storageSize:
+                  type: string
+                  default: 512Mi
+              required: [dbName]
+          required: [spec]
