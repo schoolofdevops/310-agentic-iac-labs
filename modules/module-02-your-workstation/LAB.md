@@ -34,6 +34,36 @@ docker info
 If any of these fail, fix them before continuing. This module doesn't introduce anything
 beyond what Lab 1 already needed, plus the agent CLI itself.
 
+## Two real dials: which tools, and how much permission
+
+Before you run anything, know what you're actually turning on and off. Claude Code gives you
+two separate controls, and this lab uses both.
+
+**`--allowedTools`** names which tools the agent may call at all. Leave it empty and the agent
+can only talk, it cannot touch your filesystem or run a command. Real tool names you'll see in
+this course: `Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `WebFetch`, `WebSearch`. You can
+scope a tool down instead of turning it fully on or off, `Bash(terraform *)` allows only
+commands starting with `terraform`, not an open shell. That's a real guardrail, not a toy, and
+it's the same idea M06 builds into a proper permission boundary later in this course.
+
+**`--permission-mode`** controls what happens once a tool call is actually attempted. Six real
+values, run `claude --help` yourself to confirm this list hasn't drifted:
+
+| Mode | What it does |
+|---|---|
+| `manual` / `auto` | Ask before each tool call that needs confirmation (the interactive default) |
+| `acceptEdits` | File edits are applied without asking, other tools still confirm |
+| `plan` | The agent writes a plan and stops, it does not touch a single file until you say go |
+| `dontAsk` | Skip confirmation for most tools, still respects `--allowedTools` |
+| `bypassPermissions` | No confirmation, no `--allowedTools` boundary either. The CLI's own help text says it plainly: recommended only for sandboxes with no internet access |
+
+You don't need all six today. Step 1 below runs with `--allowedTools ""`, no tools at all,
+that's the "suggest" behavior. Step 2 runs with `--allowedTools "Write,Edit"` and the
+interactive default permission handling, that's "draft." `plan` mode is previewed later in
+this lab, it's the real mechanism behind step 3 on the ladder, properly taught starting M04.
+`bypassPermissions` isn't used anywhere in this course before you understand exactly what it
+removes.
+
 ## The intent, again
 
 Same one-line prompt from Lab 1, on purpose. You already know what a good answer to it looks
@@ -102,8 +132,9 @@ output "url" {
 }
 ```
 
-That's a real, captured response, not a mock. **Type** it into a file yourself, by hand,
-character for character:
+That's a real, captured response, not a mock. This is exactly what step 1 looks like in
+practice: the agent never touched a file, you're the one moving its answer into your repo, the
+same way you'd copy a suggestion out of a chat window or a code review comment:
 
 ```
 mkdir -p ~/m02-lab/step1-suggested
@@ -112,7 +143,9 @@ cd ~/m02-lab/step1-suggested
 
 `file: ~/m02-lab/step1-suggested/main.tf`
 
-Type the block above into this file. Then run the syntax floor from Lab 1 on it:
+Copy the block above into this file, however you'd normally do that, paste it, redirect the
+agent's raw output into it with `> main.tf`, whatever's fastest for you. Then run the syntax
+floor from Lab 1 on it:
 
 ```
 terraform fmt -check -diff
@@ -187,6 +220,42 @@ Success! The configuration is valid.
 No fix needed this time, this real run's draft validated clean on the first try. That's not a
 guarantee, it's what happened once. Read every line anyway, every time, that's the whole
 lesson of step 2.
+
+## Preview: what plan mode actually does
+
+Step 2 let the agent write a file straight away. There's a real middle setting between "just
+talk" and "just write": `--permission-mode plan`. **Try** it on a fresh throwaway ask:
+
+```
+mkdir -p ~/m02-lab/plan-preview && cd ~/m02-lab/plan-preview
+claude -p "A single local_file resource writing 'hello' to hello.txt. Propose the change." \
+  --permission-mode plan
+```
+
+`ls` the directory afterward. No `hello.txt`, no `main.tf`, nothing got written. Instead, the
+agent produced a real plan document, saved under `~/.claude/plans/`, roughly shaped like this
+(your exact wording will differ, plan mode isn't deterministic, the shape is what matters):
+
+`[ Expected output shape ]`
+```
+# Plan: hello.txt via local_file
+
+## Context
+<what it found in the directory, what's already there>
+
+## Approach
+<the HCL it intends to write, as a preview, not yet applied>
+
+## Verification
+<init / validate / apply / read-back, stated up front>
+```
+
+That's the real mechanism behind step 3 on the ladder, propose with plan: the agent hands you
+a plan, not a fait accompli, and waits for you to say go. This course teaches step 3 properly
+starting M04, once there's a real skill and a real repo convention for the agent to plan
+against. For now, just notice the shape: step 1 gave you text with no structure, step 2 gave
+you a finished file, step 3 gives you a reviewable plan, ordered by how much it commits before
+you've said yes to anything.
 
 ## What actually differed
 
@@ -279,11 +348,14 @@ Checkov coverage, so a clean exit here means "found nothing to flag," not "audit
 
 #### Exercise
 
-Write a two-line note, in your own words, in a file called `notes.md` next to your two
-modules:
+Write a short note, in your own words, in a file called `notes.md` next to your two modules:
 
 - What felt different between typing step 1's suggestion and reading step 2's draft?
 - If you had to pick only one to keep doing for the rest of this course, which one, and why?
+- You just saw three real permission postures: no tools at all, `Write`/`Edit` allowed with
+  the interactive default, and `plan` mode. If this were a real production repo, not a lab,
+  which one would you want an agent running against by default, and what would have to be true
+  before you'd loosen it? `bypassPermissions` exists too, you didn't use it here, say why not.
 
 Keep the file, same as Lab 1's note, you'll compare both against your capstone answer.
 
@@ -305,6 +377,7 @@ instead of retyping the same intent details every session.
 ##### Search Keywords
 
 - Claude Code, Codex CLI, devcontainer
-- step 1 suggest, step 2 draft, autonomy ladder
+- step 1 suggest, step 2 draft, step 3 plan mode, autonomy ladder
+- `--allowedTools`, `--permission-mode`, `bypassPermissions`
 - terraform fmt, terraform validate
 - `path.module`, variable defaults
