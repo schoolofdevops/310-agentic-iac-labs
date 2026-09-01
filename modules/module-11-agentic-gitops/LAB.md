@@ -1,11 +1,15 @@
-# Lab 11: Wire the Pipeline Into CI, Reconcile With GitOps
+# Lab 11: An Agent Proposes, a Pipeline Reviews, You Merge, GitOps Delivers
 
-**Tier 2** · ~25 min · a real GitHub Actions workflow, a real pull request, a real Argo CD
-install reconciling a real `kind` cluster. Docker required, same as every earlier Tier 1/2 lab.
-Numbered teardown at the end.
+**Tier 2** · ~25 min · a real GitHub Actions workflow, a real agent-opened pull request, a real
+Argo CD install reconciling a real `kind` cluster. Docker required, same as every earlier
+Tier 1/2 lab. Numbered teardown at the end.
 
-M10 stood up a real cluster and requested a namespaced resource by hand. This lab automates the
-gate from M09 into CI, and puts a real GitOps controller on the other side of `merge`.
+M10 stood up a real cluster and requested a namespaced resource by hand. This lab is not really
+about GitOps mechanics, those are the easy part. It's about what makes an agent's production
+change safe to ship without a human reading every line: an automated gate that catches the
+agent's own mistake, a second agent that fixes the real cause once it sees the gate's real
+output, and a human who reviews one outcome instead of a diff. GitOps is what applies the result
+afterward, unattended and correctly. It's the last link in the chain, not the whole subject.
 
 ## Pre Requisites
 
@@ -56,6 +60,13 @@ jobs:
         run: terraform init -backend=false -input=false
       - name: terraform validate
         run: terraform validate
+      - name: trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: modules/module-11-agentic-gitops/lab/pipeline-demo
+          severity: HIGH,CRITICAL
+          exit-code: 1
       - name: checkov
         uses: bridgecrewio/checkov-action@v12
         with:
@@ -67,82 +78,133 @@ jobs:
 The `paths:` filter matters. Without it, every pull request in the repo would trigger this
 workflow, including ones that never touch this module.
 
-## Open a real PR with a real flaw
+This is the same fmt/validate/Trivy/Checkov shape as M09's `pipeline.sh`, minus the policy
+and cost stages, which need a `policy/` directory and an Infracost API key this toy module
+doesn't carry. Worth saying plainly: this module's `local_file` resources have nothing
+Trivy's cloud/container checks look for, so it runs clean here, 0 findings, every time. That
+is not a wasted stage. It is the same command M09 ran against real AWS resources and found 7
+HIGH/CRITICAL findings, wired to run automatically now, on infrastructure that happens not to
+trip it. Checkov is what actually catches this lab's finding, next.
 
-`file: lab/pipeline-demo/main.tf`
-```
-variable "webhook_token" {
-  description = "Token for the pipeline's status webhook"
-  type        = string
-  default     = "AKIAABCDEFGHIJKLMNOP"
-}
-```
+## Let the agent propose the change, not you
 
-**Push** a branch with that file, and **open** a real pull request. This is the same finding
-from Lab 1, on purpose: a plaintext key sitting where a scanner will actually see it.
+Every earlier lab in this course had you drive the agent through each step yourself. This one
+is different on purpose: the thing being tested is whether a *pipeline*, not a human proofreading
+a diff, catches a mistake the agent makes on its own. So the agent opens this pull request, not
+you.
 
-```
-git checkout -b m11-gitops-lab-demo
-git add .github/workflows/m11-pipeline-demo.yml modules/module-11-agentic-gitops/lab/pipeline-demo
-git commit -m "M11 lab demo: CI-gated pipeline snippet"
-git push -u origin m11-gitops-lab-demo
-gh pr create --title "M11 lab demo" --body "CI should catch the hardcoded key"
-```
-
-**Watch** the workflow run, and **read** the real failure:
+**Ask** Claude Code, from this repo, to make a real, ordinary-sounding change and open a real PR
+for it:
 
 ```
-gh run watch --exit-status
+claude -p "Add a new Terraform variable named signing_key_id to
+modules/module-11-agentic-gitops/lab/pipeline-demo/main.tf. Type string, described as 'Key ID
+used to sign outbound webhook payloads', default value a fake but realistic AWS access key ID
+literal, the way a developer in a hurry might write it. Add a local_file resource named
+webhook_signing_config that writes SIGNING_KEY_ID=\${var.signing_key_id} to
+\${path.module}/rendered/signing.env, matching the existing pipeline_config resource's pattern.
+Commit on the current branch, push, and open a real PR against
+schoolofdevops/310-agentic-iac-labs with gh pr create." \
+  --permission-mode acceptEdits --allowedTools "Read,Edit,Bash(git *),Bash(gh *)"
 ```
 
 `[ Expected output ]`
 ```
-X gate in 25s
+Done. Var + resource added, committed (89c33af), pushed, PR opened:
+https://github.com/schoolofdevops/310-agentic-iac-labs/pull/4
+
+Note: default value baked-in AKIA-pattern literal, intentional per lab demo, but flag: real
+Trivy config-scan stage (from M11 pipeline) should catch this as hardcoded secret. That's
+likely point of demo.
+```
+
+Read that note again. The agent noticed its own mistake on the way out and said so, it just
+didn't stop itself from committing it anyway, because nothing in its instructions told it to.
+That's exactly the gap a gate closes and a polite disclaimer doesn't.
+
+**Watch** the real pull request's real CI run:
+
+```
+gh pr checks 4 --watch
+```
+
+`[ Expected output ]`
+```
+JOBS
+X gate in 43s
   ✓ terraform fmt
   ✓ terraform init
   ✓ terraform validate
+  ✓ trivy
   X checkov
 
 X CKV_SECRET_2: "AWS Access Key"
 ```
 
-Nobody ran `checkov` by hand. A pull request did, on its own, and it failed for a real reason.
+Nobody ran `checkov` by hand, and nobody reviewed the agent's diff before it went out. A pull
+request did the reviewing, automatically, and it failed for a real reason: the same
+`CKV_SECRET_2` finding this course has used since Lab 1, this time on an agent's own commit.
 
-## Fix it, re-push, watch it go green
+## Send the failure back to the agent
 
-`edit file: lab/pipeline-demo/main.tf`
-```
-variable "webhook_token" {
-  description = "Token for the pipeline's status webhook. Set via TF_VAR_webhook_token, never a default."
-  type        = string
-  sensitive   = true
-}
-```
+**Ask** a second, separate agent session to fix it, using nothing but the real CI output as
+context:
 
 ```
-git add -A
-git commit -m "fix hardcoded secret, mark sensitive instead"
-git push
-gh run watch --exit-status
+claude -p "You are on git branch m11-agent-proposed-demo, PR
+schoolofdevops/310-agentic-iac-labs#4. Its CI just failed: checkov reported CKV_SECRET_2 'AWS
+Access Key' against modules/module-11-agentic-gitops/lab/pipeline-demo/main.tf. Read that file,
+find the cause (signing_key_id has a hardcoded default), fix it: remove the default, mark it
+sensitive = true, update the description to say how it should actually be set. Do not touch the
+unrelated webhook_token variable. Commit and push." \
+  --permission-mode acceptEdits --allowedTools "Read,Edit,Bash(git *)"
 ```
 
 `[ Expected output ]`
 ```
-Run M11 pipeline demo has already completed with 'success'
+Done. cb92c25 pushed. signing_key_id now no default, sensitive=true, desc says set via
+TF_VAR_signing_key_id. webhook_token untouched. CKV_SECRET_2 should clear on next CI run.
+```
+
+**Watch** the same PR's CI run again:
+
+```
+gh pr checks 4 --watch
+```
+
+`[ Expected output ]`
+```
+JOBS
+✓ gate in 26s
+  ✓ terraform fmt
+  ✓ terraform init
+  ✓ terraform validate
+  ✓ trivy
+  ✓ checkov
 ```
 
 ## Merge
 
-This is the one manual step left in the whole loop:
+This is the one manual step left in the whole loop, and notice what you're actually reviewing:
+not `terraform fmt`, not the trivy run, not the checkov run, not even the diff line by line.
+You're reviewing the outcome, a pull request that went from failing to passing for a documented
+reason, and deciding whether that's good enough to ship:
 
 ```
-gh pr merge --squash --delete-branch
+gh pr merge 4 --squash --delete-branch
 ```
 
 `[ Expected output ]`
 ```
-✓ Squashed and merged pull request
+✓ Squashed and merged pull request #4 (M11 lab demo: agent-proposed webhook signing config)
 ```
+
+Two agent sessions proposed and fixed this change. Zero human edits touched the Terraform. One
+human read a passing pull request and clicked merge. That's the whole shape of safe agentic
+delivery to prod: an agent's mistake reached a pipeline before it reached a person, the pipeline
+caught it and said exactly why, a second agent session fixed the actual cause instead of the
+symptom, and the only judgment call left for a human was "is this diff, now that it's green, the
+right thing to ship."
 
 ## Stand up the cluster, install Argo CD
 
@@ -158,16 +220,22 @@ nodes:
 
 ```
 kind create cluster --name m11-lab --config lab/starter/kind-config.yaml
-kubectl create namespace argocd
-kubectl apply -n argocd --server-side --force-conflicts \
+kubectl --context kind-m11-lab create namespace argocd
+kubectl --context kind-m11-lab apply -n argocd --server-side --force-conflicts \
   -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-kubectl -n argocd wait --for=condition=available --timeout=240s \
+kubectl --context kind-m11-lab -n argocd wait --for=condition=available --timeout=240s \
   deployment/argocd-repo-server deployment/argocd-server
 ```
 
 `--server-side --force-conflicts` isn't decoration either. Argo CD's own install manifest is
 big enough that a plain client-side `kubectl apply` fails outright with an annotation-size
 error the first time.
+
+`--context kind-m11-lab` on every command from here on isn't decoration either. `kind create
+cluster` changes your kubeconfig's current-context globally, so if you (or an earlier module)
+still have another kind cluster around, creating this one can silently leave `kubectl` pointed
+at the wrong cluster. Pinning the context makes every command below correct regardless of what
+else is running on your machine.
 
 ## Point Argo CD at the real, merged repo
 
@@ -198,13 +266,13 @@ is a plain `ConfigMap` manifest merged there just now, the same repo you opened 
 against a moment ago.
 
 ```
-kubectl apply -f lab/solution/argocd-app.yaml
+kubectl --context kind-m11-lab apply -f lab/solution/argocd-app.yaml
 ```
 
 **Verify** it goes `Synced` and `Healthy`:
 
 ```
-kubectl get application m11-gitops-demo -n argocd
+kubectl --context kind-m11-lab get application m11-gitops-demo -n argocd
 ```
 
 `[ Expected output ]`
@@ -216,7 +284,7 @@ m11-gitops-demo    Synced        Healthy
 **Confirm** the `ConfigMap` really landed:
 
 ```
-kubectl get configmap m11-gitops-demo -n default -o jsonpath='{.data.message}'
+kubectl --context kind-m11-lab get configmap m11-gitops-demo -n default -o jsonpath='{.data.message}'
 ```
 
 `[ Expected output ]`
@@ -229,9 +297,9 @@ reconciled by GitOps, not kubectl apply
 **Tamper** with the resource directly, the way someone might by accident:
 
 ```
-kubectl patch configmap m11-gitops-demo -n default --type merge \
+kubectl --context kind-m11-lab patch configmap m11-gitops-demo -n default --type merge \
   -p '{"data":{"message":"manually tampered, should get corrected"}}'
-kubectl get configmap m11-gitops-demo -n default -o jsonpath='{.data.message}'
+kubectl --context kind-m11-lab get configmap m11-gitops-demo -n default -o jsonpath='{.data.message}'
 ```
 
 `[ Expected output ]`
@@ -242,7 +310,7 @@ manually tampered, should get corrected
 **Wait** a few seconds, and **check** again:
 
 ```
-kubectl get configmap m11-gitops-demo -n default -o jsonpath='{.data.message}'
+kubectl --context kind-m11-lab get configmap m11-gitops-demo -n default -o jsonpath='{.data.message}'
 ```
 
 `[ Expected output ]`
@@ -259,7 +327,7 @@ just read about.
 **1. Remove the Argo CD application:**
 
 ```
-kubectl delete -f lab/solution/argocd-app.yaml
+kubectl --context kind-m11-lab delete -f lab/solution/argocd-app.yaml
 ```
 
 **2. Delete the cluster:**
@@ -285,24 +353,27 @@ is what actually makes this step 5 rather than a still-manual step 4 with extra 
 
 #### Summary
 
-You wired the M09 pipeline into CI, watched it catch a real secret automatically, merged the
-one thing left for a human to decide, and watched a real GitOps controller reconcile a real
-cluster from that merge, unattended, including correcting a real manual tamper on its own.
-That's step 5, supervised autonomy, for real: you reviewed the pull request's outcome, not
-each gate or each sync event. M12 is where this course asks what happens when the loop itself,
-not just one pipeline, runs across many agents at once.
+An agent proposed a real change and opened a real pull request. A pipeline, not a human, caught
+the agent's own hardcoded secret and said exactly why. A second agent fixed the real cause from
+that real failure, not a guess. A human reviewed one outcome, a pull request gone from red to
+green, and merged it, the only manual step in the whole chain. A real GitOps controller then
+reconciled a real cluster from that merge, unattended, including correcting a real manual tamper
+on its own. That's step 5, supervised autonomy, for real: you reviewed outcomes, propose and
+merge, not each gate, each fix, or each sync event in between. M12 is where this course asks what
+happens when the loop itself, not just one pipeline, runs across many agents at once.
 
 ##### Reading List
 
 - [Argo CD: core concepts](https://argo-cd.readthedocs.io/en/stable/core_concepts/)
 - [GitHub Actions: workflow syntax](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
-- `reading/concepts.md` in this module: why synced and healthy are different questions, and
-  exactly what step 5 does and doesn't mean
+- `reading/concepts.md` in this module: why propose, review, merge, and apply are four separate
+  jobs, and exactly what step 5 does and doesn't mean
 
 ##### Search Keywords
 
+- agent-proposed pull request, propose then review then merge then apply
 - github actions, pull_request paths filter
-- checkov-action, CKV_SECRET_2
+- trivy config scan, checkov-action, CKV_SECRET_2
 - argocd, Application, syncPolicy, automated, selfHeal
 - kind, server-side apply, force-conflicts
 - gitops, reconcile, drift correction
