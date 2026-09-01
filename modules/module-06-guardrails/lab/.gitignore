@@ -4,3 +4,6 @@
 *.tfstate.*
 *.tfplan
 tfplan.json
+*.approved
+plans/*.md
+!plans/.gitkeep

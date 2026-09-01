@@ -9,7 +9,8 @@ resource "aws_s3_bucket" "artifacts" {
 }
 
 resource "aws_s3_bucket" "logs" {
-  bucket = "m06-lab-logs"
+  bucket        = "m06-lab-logs"
+  force_destroy = true
 
   tags = {
     Environment = "lab"
