@@ -63,7 +63,17 @@ for i in $(seq 1 40); do
   sleep 5
 done
 [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ] || fail "never reached Synced/Healthy (sync=$SYNC health=$HEALTH)"
-kubectl get configmap capstone-app -n default -o jsonpath='{.data}' | grep -q "staging" || fail "composed configmap missing real data"
+# Argo CD reports Synced/Healthy as soon as it applies the XR object itself; Crossplane's
+# own reconcile of that XR into a composed ConfigMap is a separate controller loop that can
+# still be in progress a few seconds later. Wait for the composed resource directly, don't
+# treat Argo's status as a proxy for Crossplane's (confirmed real gap, not a fixed sleep away).
+COMPOSED=""
+for i in $(seq 1 20); do
+  COMPOSED=$(kubectl get configmap capstone-app -n default -o jsonpath='{.data}' 2>/dev/null)
+  echo "$COMPOSED" | grep -q "staging" && break
+  sleep 3
+done
+echo "$COMPOSED" | grep -q "staging" || fail "composed configmap missing real data"
 echo "    ok, Synced/Healthy, real ConfigMap reconciled from the merged repo"
 
 echo "==> 7. numbered teardown: remove application, delete cluster"
