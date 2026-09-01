@@ -2,6 +2,19 @@ set -uo pipefail
 cd "$(dirname "$0")"
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 
+echo "==> reduce: --compact must cut checkov output by a real, large margin"
+FLOCI_SPIKE="../../../labs/shared/floci-spike"
+[ -d "$FLOCI_SPIKE" ] || fail "floci-spike dir not found at $FLOCI_SPIKE"
+checkov -d "$FLOCI_SPIKE" --framework terraform >/tmp/m03-verbose.log 2>/dev/null
+checkov -d "$FLOCI_SPIKE" --framework terraform --compact --quiet >/tmp/m03-compact.log 2>/dev/null
+VERBOSE_SIZE=$(wc -c </tmp/m03-verbose.log)
+COMPACT_SIZE=$(wc -c </tmp/m03-compact.log)
+[ "$VERBOSE_SIZE" -gt 0 ] || fail "verbose checkov output was empty"
+[ "$COMPACT_SIZE" -gt 0 ] || fail "compact checkov output was empty"
+REDUCTION=$(( (VERBOSE_SIZE - COMPACT_SIZE) * 100 / VERBOSE_SIZE ))
+[ "$REDUCTION" -ge 50 ] || fail "expected at least 50% reduction, got ${REDUCTION}% (verbose=$VERBOSE_SIZE compact=$COMPACT_SIZE)"
+echo "    ok, verbose=$VERBOSE_SIZE bytes, compact=$COMPACT_SIZE bytes, ${REDUCTION}% smaller"
+
 echo "==> run 1 (no context): fmt + validate"
 terraform -chdir=starter fmt -check -diff >/tmp/m03-fmt1.log 2>&1 || fail "starter not fmt-clean: $(cat /tmp/m03-fmt1.log)"
 terraform -chdir=starter init -backend=false -input=false -no-color >/dev/null || fail "starter init"
@@ -34,4 +47,4 @@ echo "    ok, AGENTS.md has all four required sections"
 rm -rf starter/.terraform starter/.terraform.lock.hcl solution/.terraform solution/.terraform.lock.hcl
 
 echo
-echo "LAB PASSED — run 1 (no context) fails checkov, run 2 (with AGENTS.md) is clean, AGENTS.md is well-formed"
+echo "LAB PASSED — reduce: compact cuts checkov output by a real, large margin; retain: run 1 (no context) fails checkov, run 2 (with AGENTS.md) is clean, AGENTS.md is well-formed. Route (the fresh-session STATE.md exercise) is hands-on only, not scripted here, see LAB.md."

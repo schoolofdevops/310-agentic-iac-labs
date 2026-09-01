@@ -3,11 +3,11 @@
 **Tier 0 → 1** · ~15 min · your own agent (Claude Code or Codex), the same
 `terraform` and `checkov` from M01.
 
-M01 had you run a generate-verify-fix loop by hand. This lab asks a narrower
-question: does the loop even need the "verify" step as often, if the agent had
-better information to start with? You're going to run the exact same intent
-twice, once with nothing written down, once with a real `AGENTS.md` in place,
-and read the difference for yourself.
+M01 had you run a generate-verify-fix loop by hand. This lab covers all three
+disciplines from `reading/concepts.md`: **Reduce**, filtering noisy tool output
+before it enters the window; **Retain**, standing facts that survive a session
+reset; **Route**, a plan written to disk so a session with zero memory can pick
+it up correctly. Three short, real exercises, one per discipline.
 
 ## Pre Requisites
 
@@ -15,6 +15,31 @@ and read the difference for yourself.
   This lab reuses M01's exact one-line intent.
 - An agent you can prompt directly, Claude Code or Codex, from a terminal in a
   scratch directory.
+
+## Reduce: measure it yourself
+
+Before touching an agent at all, **measure** what a raw tool call actually
+costs versus a filtered one. Reuse the 21-resource module from
+`labs/shared/floci-spike`, this course's own real Tier 1 spike:
+
+```
+cd labs/shared/floci-spike
+checkov -d . --framework terraform > /tmp/verbose.txt
+checkov -d . --framework terraform --compact --quiet > /tmp/compact.txt
+wc -c /tmp/verbose.txt /tmp/compact.txt
+```
+
+`[ Expected output shape ]`
+```
+   25605 /tmp/verbose.txt
+    3881 /tmp/compact.txt
+```
+
+Same scan, same 25 findings. The only difference is whether every passed check
+and every repeated source-code excerpt got printed too. That's an ~85%
+reduction from one flag. **Read** `/tmp/verbose.txt` and count how many lines
+you'd actually act on versus how many you'd just scroll past. That gap is
+exactly what Reduce removes before it ever reaches an agent's context window.
 
 ## The intent, again
 
@@ -24,7 +49,13 @@ Same as M01, read it the way an agent would:
 > with its rendered HTML kept on disk so I can diff it in git. No secrets in the
 > container. I don't need it exposed outside this machine.
 
-## Run 1: no context
+## Retain: the AGENTS.md exercise
+
+Now the standing-context discipline: run the exact same intent twice, once
+with nothing written down, once with a real `AGENTS.md` in place, and read the
+difference for yourself.
+
+### Run 1: no context
 
 **Copy** the no-context starter into a scratch directory and hand your own
 agent this exact intent, in a folder with nothing else in it:
@@ -65,7 +96,7 @@ Check: CKV_SECRET_2: "AWS Access Key"
 Terraform. It's legal, it's readable, it just carries a convention nobody
 wrote down: secrets never get a `default`.
 
-## Write the context
+### Write the context
 
 Now **write** the file that was missing. This is the actual deliverable of
 this lab, not a formality:
@@ -107,7 +138,7 @@ hardcoded string, never a `.tfvars` file checked into git.
 
 Keep it short. A file nobody reads is worse than no file at all.
 
-## Run 2: with context
+### Run 2: with context
 
 `cp` a fresh copy of the starter next to your new `AGENTS.md`, and hand your
 agent the **exact same intent** again, in a folder that now has that file in
@@ -147,7 +178,7 @@ Exit code: 0
 Same intent. Same agent. Same repo, minus one file. That's the whole lesson of
 this lab in one diff.
 
-## Diff the two runs
+### Diff the two runs
 
 **Compare** `lab/starter/main.tf` against `lab/solution/main.tf` yourself:
 
@@ -178,6 +209,68 @@ One variable block. That's the entire cost of writing `AGENTS.md` down once,
 against the entire cost of a scanner catching a real credential in source
 control after the fact. Notice which one you'd rather be doing every day.
 
+## Route: prove it yourself
+
+Retain proved that standing facts survive a reset. This exercise proves the
+harder claim: an in-progress plan can survive one too, as long as it never
+lived only in the conversation.
+
+**Write** a state file for an in-progress task, a real decision plus a real
+next action, not a vague TODO:
+
+```
+mkdir -p ~/m03-route && cd ~/m03-route
+cp modules/module-03-context-engineering/lab/starter/main.tf .
+```
+
+`file: ~/m03-route/STATE.md`
+```
+## Where this stands
+main.tf has one open finding: var.log_shipper_key carries a hardcoded default.
+Checkov has not been re-run since the finding was found.
+
+## Decision already made, do not re-litigate
+We are NOT deleting the variable. The fix is: drop the default, add
+sensitive = true, set via TF_VAR_log_shipper_key at deploy time.
+
+## Next action
+Edit main.tf: remove the default, add sensitive = true. Run checkov -d . and
+confirm exit 0.
+```
+
+**Close that terminal, or open a brand new one.** The point only holds if the
+next command starts with genuinely zero memory of what you just did:
+
+```
+cd ~/m03-route
+claude -p "Read STATE.md in this directory and do exactly what it says. Nothing else." \
+  --allowedTools "Read,Write,Edit,Bash" --permission-mode acceptEdits
+```
+
+**Verify** the fresh session actually did it, not just claimed to:
+
+```
+cat main.tf
+checkov -d .
+```
+
+`[ Expected output shape ]`
+```
+variable "log_shipper_key" {
+  description = "... Set via TF_VAR_log_shipper_key, never a default."
+  type        = string
+  sensitive   = true
+}
+```
+```
+Exit code: 0
+```
+
+Nobody re-explained the task to that session. Nobody re-argued the decision.
+It read one file and finished the job correctly, because the file, not the
+conversation, was carrying the plan. That's Route. A conversation you clear is
+gone. A file on disk is still there.
+
 ## Which failure was which
 
 Not every mistake an agent makes is a context problem. **Note** the
@@ -196,30 +289,42 @@ difference, because it's the seam between this module and M06:
 
 Delete one section from your own `AGENTS.md`, the naming convention or the
 provider pins, and run the exact same intent a third time. Does the mistake
-that section was preventing come back? Write two lines in `notes.md`: which
-line turned out to be load-bearing, and how you'd have found that out without
-deleting it on purpose.
+that section was preventing come back? Then, separately, write a `STATE.md`
+of your own for something you're actually mid-way through this week, not a
+lab exercise, a real piece of work. Write three lines in `notes.md`: which
+`AGENTS.md` line turned out to be load-bearing, what surprised you about
+handing your real `STATE.md` to a fresh session, and which of the three
+disciplines, reduce, retain, route, you were worst at before this lab.
 
 #### Summary
 
-You ran the same intent twice, and the only thing that changed between the
-two runs was one file the agent read before it started. That's context
-engineering: not a cleverer prompt, not a bigger model, just the standing
-information a new hire would get on day one, written down once and reused on
-every run after. M06 picks up where this lab's second finding leaves off: the
-gate for mistakes that writing something down can't fully prevent.
+Three real exercises, one per discipline. Reduce: one flag cut a real scan's
+output by 85% without losing a single finding. Retain: the same intent, twice,
+differed only by one file the agent read before it started. Route: a fresh
+session with zero memory finished a real task correctly because the plan
+lived on disk, not in the conversation that had already been cleared. None of
+this was a cleverer prompt or a bigger model. It was managing a resource that
+resets, on purpose, in three specific ways. M06 picks up where Retain's second
+finding leaves off: the gate for mistakes that writing something down can't
+fully prevent.
 
 ##### Reading List
 
 - [Anthropic: Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- `reading/concepts.md` in this module: the information-gap finding, 11 of 14
-  policy failures resolved by making policy text visible
+- `reading/concepts.md` in this module: the full Reduce/Retain/Route
+  breakdown, and the information-gap finding, 11 of 14 policy failures
+  resolved by making policy text visible
 - M01's `reading/concepts.md`: the three-layer diagnostic this lab's last
   section applies
+- M12's `reading/concepts.md`: the real, measured number behind automated
+  context-compression tools, checked against their marketing claims
 
 ##### Search Keywords
 
+- context engineering: reduce, retain, route
 - AGENTS.md, CLAUDE.md, standing context
+- checkov --compact, filtering tool output
+- STATE.md, fresh session, context reset
 - context window, context engineering vs prompt engineering
 - retrieval, repo shape
 - sensitive variable, TF_VAR_
