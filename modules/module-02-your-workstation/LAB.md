@@ -38,44 +38,35 @@ beyond what Lab 1 already needed, plus the agent CLI itself.
 
 Before you run anything, know what you're actually turning on and off. Claude Code gives you
 two separate controls: which tools the agent may call at all, and how much it can do with them
-without stopping to ask you.
+without stopping to ask you. **This is how you'll actually use them, day to day:**
 
-**Day to day, you won't set these with flags.** You'll type `claude` and land in an
-interactive session. The first time the agent wants to touch a file or run a command, it stops
-and asks: allow this once, allow it for the rest of this session, or deny it. Press
-**Shift+Tab** to cycle the session's permission mode right there in the prompt, normal ask-first,
-through auto-accepting edits, to plan mode. Type **`/permissions`** to open the actual
-allow/deny list and edit it directly, add `Bash(terraform *)` to let the agent run terraform
-commands without asking every single time, without handing it an open shell. If you want a
-session where nothing stops to ask at all, that's `claude --dangerously-skip-permissions`, and
-you reach for it with your eyes open, not by accident, the CLI's own help text says it plainly:
+Type `claude` and land in an interactive session. The first time the agent wants to touch a
+file or run a command, it stops and asks: allow this once, allow it for the rest of this
+session, or deny it. That prompt, appearing and you answering it, **is** the tool/permission
+system in normal use, not a flag you set in advance. Press **Shift+Tab** to cycle the session's
+permission mode right there in the prompt, normal ask-first, through auto-accepting edits, to
+plan mode. Type **`/permissions`** to open the actual allow/deny list and edit it directly, add
+`Bash(terraform *)` to let the agent run terraform commands without asking every single time,
+without handing it an open shell. If you want a session where nothing stops to ask at all,
+that's `claude --dangerously-skip-permissions`, launched that way from the start, and you reach
+for it with your eyes open, not by accident, the CLI's own help text says it plainly:
 recommended only for sandboxes with no internet access.
 
-That's the real day-to-day workflow, and it's worth trying right now before this lab moves on
-to anything scripted: run `claude`, ask it something small about this repo, watch the
-permission prompt actually appear, then press Shift+Tab and watch the mode indicator change.
-
-**This lab's actual steps use `-p` and CLI flags instead, on purpose, not because that's how
-you'll normally work.** A lab has to be copy-pasteable and give the same result every time you
-run it, an interactive back-and-forth can't be scripted that way. `--allowedTools` is the
-non-interactive equivalent of the allow/deny list `/permissions` edits for you; leave it empty
-and the agent can only talk, it can't touch your filesystem or run a command at all.
-`--permission-mode` is the non-interactive equivalent of the Shift+Tab cycle, six real values,
-run `claude --help` yourself to confirm this list hasn't drifted:
-
-| Mode | Interactive equivalent |
+| Mode | How you actually reach it |
 |---|---|
-| `manual` / `auto` | The normal ask-before-each-tool-call default |
-| `acceptEdits` | Shift+Tab once, into auto-accept-edits |
-| `plan` | Shift+Tab again, into plan mode |
-| `dontAsk` | Fewer prompts, still respects `--allowedTools`/`/permissions` |
-| `bypassPermissions` | `claude --dangerously-skip-permissions`, no boundary at all |
+| `manual` / `auto` | Nothing to do, it's the default. The prompt just appears |
+| `acceptEdits` | Shift+Tab once, mid-session |
+| `plan` | Shift+Tab again, mid-session |
+| `dontAsk` | Fewer prompts, still respects your `/permissions` list |
+| `bypassPermissions` | Launch as `claude --dangerously-skip-permissions` |
 
-Step 1 below uses `--allowedTools ""`, the scripted version of never granting anything, that's
-the "suggest" behavior. Step 2 uses `--allowedTools "Write,Edit"`, the scripted version of
-allowing edits, that's "draft." `plan` mode is previewed later in this lab, it's the real
-mechanism behind step 3 on the ladder, properly taught starting M04. `bypassPermissions` isn't
-used anywhere in this course before you understand exactly what it removes.
+`--allowedTools` and `--permission-mode` are the same six behaviors as CLI flags instead of a
+keypress, real, documented (`claude --help` yourself to confirm this list hasn't drifted), and
+this lab's copy-pasteable steps use them for one honest reason: a lab guide has to show you
+exact, real, reproducible output, and an interactive back-and-forth can't be pasted into a
+static page the same way twice. **Do each step interactively first, the way you actually would.
+The flagged command underneath it is the scripted capture of that same action, not a
+replacement for it.**
 
 ## The intent, again
 
@@ -88,8 +79,23 @@ like, that's what makes the comparison in this lab meaningful:
 
 ## Step 1: suggest, you type it
 
-**Ask** your agent for a suggestion only, don't let it touch any file yet. In Claude Code,
-that means running it without file-write tools available:
+**Open** `claude` and ask it the intent above, plainly, the way you would in any real session.
+If it reaches for a tool to write a file, **deny** it right there at the permission prompt,
+that's you controlling step 1 in real time, not a flag set in advance. Either way you'll get a
+suggestion back as chat text.
+
+```
+claude
+```
+```
+> Give me a local nginx container for testing, serving a static page I control, with its
+  rendered HTML kept on disk so I can diff it in git. No secrets in the container. I don't
+  need it exposed outside this machine. Just show me the Terraform, don't write any files yet.
+```
+
+**For this lab guide to show you exact, reproducible output**, here's the same ask, scripted,
+with the tool boundary set up front instead of denied live (`--allowedTools ""` means there's
+nothing to even prompt you for):
 
 ```
 claude -p "You are helping with a Terraform module. Do NOT write or create any files. Just
@@ -205,12 +211,25 @@ Success! The configuration is valid.
 
 ## Step 2: draft, the agent writes it
 
-**Ask** the same agent the same intent again, in a fresh session, this time letting it write
-the file directly:
+**Open** a fresh `claude` session in a new directory, same intent, and this time when the
+permission prompt appears asking to write `main.tf`, **approve** it. That's the whole
+mechanism, you didn't need a flag, you just said yes at the prompt instead of no:
 
 ```
-mkdir -p ~/m02-lab/step2-drafted
-cd ~/m02-lab/step2-drafted
+mkdir -p ~/m02-lab/step2-drafted && cd ~/m02-lab/step2-drafted
+claude
+```
+```
+> Write a Terraform module (main.tf) in this directory implementing this intent directly:
+  Give me a local nginx container for testing, serving a static page I control, with its
+  rendered HTML kept on disk so I can diff it in git. No secrets in the container. I don't
+  need it exposed outside this machine.
+```
+
+**Scripted, for a reproducible capture** (same ask, tools granted up front instead of approved
+live at the prompt):
+
+```
 claude -p "Write a Terraform module (main.tf) in the current directory implementing this
 intent directly. Do not ask questions, just write the file. Intent: <paste the intent above>"
 --allowedTools "Write,Edit"
@@ -237,10 +256,22 @@ lesson of step 2.
 ## Preview: what plan mode actually does
 
 Step 2 let the agent write a file straight away. There's a real middle setting between "just
-talk" and "just write": `--permission-mode plan`. **Try** it on a fresh throwaway ask:
+talk" and "just write." **Open** `claude` in a fresh directory and press **Shift+Tab** until
+the mode indicator at the bottom of the prompt reads `plan mode`, then ask it a small throwaway
+thing:
 
 ```
 mkdir -p ~/m02-lab/plan-preview && cd ~/m02-lab/plan-preview
+claude
+```
+```
+[Shift+Tab, Shift+Tab, until the prompt shows: plan mode on]
+> A single local_file resource writing 'hello' to hello.txt. Propose the change.
+```
+
+**Scripted equivalent**, same throwaway ask, mode set as a flag instead of Shift+Tab:
+
+```
 claude -p "A single local_file resource writing 'hello' to hello.txt. Propose the change." \
   --permission-mode plan
 ```
