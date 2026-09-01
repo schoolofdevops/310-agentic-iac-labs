@@ -1,0 +1,31 @@
+Real values, read straight from `terraform plan`/`terraform state show` output on each
+module, same ticket, same agent, only the presence of a written spec differs.
+
+                          vibe-coded          spec-driven         driven by
+health_check_grace_period 60                  180                 FR-001 / SC-001
+termination_policies      (unset, AWS default) OldestLaunchTemplate, OldestInstance, Default
+                                                                    FR-002 / SC-002
+min_size / max_size       2 / 6               2 / 4               FR-003 / SC-003
+target_value (CPU %)      60                  55                  FR-004 / SC-004
+default_cooldown          (unset, 300s default) 90                FR-004 / SC-004
+metadata_options.http_tokens (unset, IMDSv1 allowed) required     FR-005 / SC-005
+
+Every row above is a real judgment call the one-line ticket left silent. Nothing in "give
+me an autoscaling web tier for our checkout service" says any of these numbers. The vibe
+run didn't fail, it just picked something plausible-looking for each one and moved on,
+which is exactly what "vibe coding" a spec-less ask does under a deadline.
+
+One more thing the diff shows that the spec never asked for: the vibe-coded run also
+free-associated a whole ALB, two security groups, and a target group that the ticket
+never mentioned and the spec never required. checkov finds 9 real findings on that
+unrequested surface alone (deletion protection, access logging, WAF, TLS 1.2, HTTP-to-
+HTTPS redirect). The spec-driven run built exactly what FR-001 through FR-005 asked for
+and nothing else. A spec doesn't just pin down ambiguous numbers, it also bounds scope.
+
+checkov, same two modules:
+
+  spec-driven: 7 passed, 1 failed (CKV_AWS_153, tags on the ASG's launch configuration,
+  a real gap this spec never wrote a requirement for)
+
+  vibe-coded: 20 passed, 14 failed (CKV_AWS_79 among them, IMDSv1 left enabled, exactly
+  what FR-005 pinned down and this module never mentioned)

@@ -1,12 +1,13 @@
 # Lab 7: Write a Spec, Generate Against It, Check the Criteria
 
-**Tier 1** · ~20 min · Terraform, Checkov, and Floci, same setup as the last few labs.
+**Tier 1** · ~30 min · Terraform, Checkov, and Floci, same setup as the last few labs.
 
 M01's lab gave you a one-line intent and a starter skeleton. That's fine for a first exercise.
 Real work rarely comes in one line, it comes as a ticket that says roughly what someone wants and
-leaves the rest for you to fill in. This lab gives you exactly that kind of ticket, and you're
-going to answer it two different ways: once with a written spec, once by feel. Then you check both
-against the same criteria and see what the difference actually buys you.
+leaves the rest for you to fill in. This lab gives you exactly that kind of ticket, on a module with
+real teeth: an autoscaling web tier, not a single bucket. You're going to answer it two different
+ways, once with a written spec, once by feel, then check both against the same real, applied
+infrastructure and see what the difference actually buys you.
 
 ## Pre Requisites
 
@@ -17,95 +18,148 @@ against the same criteria and see what the difference actually buys you.
 
 Here it is, verbatim, the way it would land in your queue:
 
-> Give me an S3 bucket for storing build artifacts.
+> Give me an autoscaling web tier for our checkout service.
 
-Read it again. It says nothing about who can read the bucket, whether an overwritten artifact is
-recoverable, or whether it's encrypted. That silence is normal. Most tickets look exactly like
-this.
+Read it again. It says nothing about how long a slow-starting instance gets before it's assumed
+dead, which instance dies first when the tier scales in, how big "auto" is allowed to get, or how
+fast it should react to a real spike. That silence is normal. Most tickets look exactly like this,
+and an autoscaling group has more places for that silence to turn into a real decision than a
+single S3 bucket ever did.
 
 ## Write the spec
 
-You could start typing Terraform right now. Don't. **Write** a spec first: what this bucket must
-do, what it must never do, and how you'll know it's right, before any HCL exists.
+You could start typing Terraform right now. Don't. **Write** a spec first: what this tier must do,
+what it must never do, and how you'll know it's right, before any HCL exists.
 
 GitHub's Spec Kit gives you a real, structured template for this (`specify init` installs it as
 skills inside Claude Code: `/speckit-specify`, `/speckit-plan`, `/speckit-tasks`). This lab's own
-spec was written straight into that template's shape, filled in by hand:
+spec was written straight into that template's shape:
 
 `file: lab/spec-driven/spec.md`
 ```
-# Feature Specification: Build Artifacts Bucket
+# Feature Specification: Checkout Web Tier Autoscaling
 
 ## Requirements
 
 ### Functional Requirements
 
-- FR-001: The bucket MUST have versioning enabled.
-- FR-002: The bucket MUST have all four public-access-block settings enabled.
-- FR-003: The bucket MUST use server-side encryption (SSE) by default.
-- FR-004: The bucket MUST be tagged with purpose and managed_by.
-- FR-005: The bucket name MUST be a variable, not hardcoded.
+- FR-001: The Auto Scaling Group's health check grace period MUST be long enough to
+  survive the checkout app's real boot sequence (a `dnf install` of httpd plus service
+  start on a cold instance, which can run well past a minute on a slow mirror), so a
+  slow-starting-but-healthy instance is never killed as if it had failed. It must not be
+  so long that a genuinely broken instance survives for minutes before being replaced.
+- FR-002: Scale-in MUST prefer terminating the oldest launch template version first, so a
+  mid-rollout instance running the newest code is never the one picked to die during a
+  routine scale-in.
+- FR-003: Capacity MUST be bounded to a known, justified peak, not an arbitrary round
+  number. This tier's measured peak is 2x its steady-state baseline of 2 instances.
+- FR-004: Scale-out MUST target average CPU utilization with headroom before saturation,
+  and MUST set an explicit cooldown short enough to react to a real flash-sale traffic
+  spike, not the provider's 5-minute default built for slower-moving workloads.
+- FR-005: Instance metadata MUST require IMDSv2 tokens. IMDSv1 has no request signing and
+  is a known SSRF pivot path into instance credentials.
 
 ### Constraints
 
-- C-001: The bucket MUST NOT have a public bucket policy attached.
-- C-002: No account-specific value may be hardcoded into a resource block.
+- C-001: No account-specific value may be hardcoded into a resource block.
+- C-002: The launch template and Auto Scaling Group must be wired together, not left as
+  two independently-applied resources.
 
 ## Success Criteria
 
-- SC-001: versioning status = Enabled
-- SC-002: all four public-access-block settings = true
-- SC-003: server-side encryption configured, AES256 or aws:kms
-- SC-004: tags include purpose and managed_by
-- SC-005: checkov passes the specific checks this spec maps to (CKV_AWS_21,
-  CKV2_AWS_6, CKV_AWS_19) -- see the note below
+- SC-001: `health_check_grace_period` = 180
+- SC-002: `termination_policies` = `["OldestLaunchTemplate", "OldestInstance", "Default"]`
+- SC-003: `min_size` = 2, `max_size` = 4
+- SC-004: an `aws_autoscaling_policy` of type `TargetTrackingScaling`, predefined metric
+  `ASGAverageCPUUtilization`, `target_value` = 55, and the ASG's own `default_cooldown` = 90
+- SC-005: the launch template's `metadata_options.http_tokens` = `"required"`
+- SC-006: checkov passes `CKV_AWS_79` (IMDSv2) on the launch template -- see the note below
 ```
 
-Three things separate this from the one-line ticket: **requirements** (what it must do),
-**constraints** (what it must never do), and **acceptance criteria** (how you'll check, stated
-before you generate anything). The full spec is in `lab/spec-driven/spec.md`, read it end to end,
-it's short.
+Five requirements, two constraints, six success criteria, every one of them a real decision the
+one-line ticket left open. The full spec is in `lab/spec-driven/spec.md`, read it end to end.
 
-Notice SC-005 doesn't promise a fully clean `checkov` run. Keep that in mind, you'll see exactly
+Notice SC-006 doesn't promise a fully clean `checkov` run. Keep that in mind, you'll see exactly
 why in a few steps.
 
 ## Generate against the spec
 
-**Write** the module so every line traces back to a requirement:
+**Write** the module so every line traces back to a requirement or success criterion. This lab's
+own spec-driven module was generated by a real agent invocation against this exact spec, then
+validated, nothing hand-tuned after the fact:
 
 `file: lab/spec-driven/main.tf`
 ```
-resource "aws_s3_bucket" "artifacts" {
-  bucket = var.bucket_name
+# data source: no hardcoded AMI id (C-001)
+data "aws_ami" "al2023" {
+  most_recent = true
+  owners      = ["amazon"]
 
-  tags = {
-    purpose    = "build-artifacts" # FR-004
-    managed_by = "terraform"       # FR-004
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
   }
 }
 
-resource "aws_s3_bucket_versioning" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-  versioning_configuration {
-    status = "Enabled" # FR-001 / SC-001
+resource "aws_launch_template" "checkout_web" {
+  name_prefix   = "checkout-web-"
+  image_id      = data.aws_ami.al2023.id # C-001: AMI resolved via data source, not hardcoded
+  instance_type = "t3.micro"
+
+  # SC-005 / FR-005: require IMDSv2 tokens (CKV_AWS_79) -- blocks the SSRF-to-credentials
+  # pivot that IMDSv1's unsigned metadata requests allow.
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
+resource "aws_autoscaling_group" "checkout_web" {
+  name = "checkout-web-asg"
 
-  block_public_acls       = true # FR-002 / SC-002
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  # C-002: launch template wired directly into the ASG (latest version), not applied
+  # independently.
+  launch_template {
+    id      = aws_launch_template.checkout_web.id
+    version = "$Latest"
+  }
+
+  # SC-003 / FR-003: peak bounded to 2x the 2-instance steady-state baseline, not a
+  # round-number guess.
+  min_size = 2
+  max_size = 4
+
+  # SC-001 / FR-001: long enough to survive a cold-boot dnf install + httpd start on a
+  # slow mirror, short enough that a genuinely broken instance doesn't linger for minutes.
+  health_check_grace_period = 180
+  health_check_type         = "EC2"
+
+  # SC-002 / FR-002: kill the oldest launch template version first so a mid-rollout
+  # instance running the newest code is never the one picked during routine scale-in.
+  termination_policies = ["OldestLaunchTemplate", "OldestInstance", "Default"]
+
+  # SC-004 / FR-004: cooldown shortened from the provider's 5-minute default so the ASG
+  # can react to a real flash-sale spike.
+  default_cooldown = 90
+
+  availability_zones = ["us-east-1a"]
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256" # FR-003 / SC-003
+# SC-004 / FR-004: target tracking on average CPU with headroom before saturation.
+resource "aws_autoscaling_policy" "checkout_web_cpu" {
+  name                   = "checkout-web-cpu-target-tracking"
+  autoscaling_group_name = aws_autoscaling_group.checkout_web.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
     }
+    target_value = 55
   }
 }
 ```
@@ -131,13 +185,119 @@ the one line. Don't think about it too hard, that's the point:
 
 `file: lab/vibe-coded/main.tf`
 ```
-resource "aws_s3_bucket" "artifacts" {
-  bucket = "m07-build-artifacts-demo-vibe"
+data "aws_ami" "al2023" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+resource "aws_security_group" "checkout_web" { # ... ingress from the ALB, egress open }
+resource "aws_security_group" "checkout_alb" { # ... ingress from the internet, egress open }
+
+resource "aws_launch_template" "checkout_web" {
+  name_prefix   = "checkout-web-"
+  image_id      = data.aws_ami.al2023.id
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.checkout_web.id]
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    dnf install -y httpd
+    echo "checkout service ok" > /var/www/html/index.html
+    systemctl enable --now httpd
+  EOF
+  )
+  tag_specifications {
+    resource_type = "instance"
+    tags = { Name = "checkout-web" }
+  }
+}
+
+resource "aws_lb" "checkout" { # ... }
+resource "aws_lb_target_group" "checkout_web" { # ... }
+resource "aws_lb_listener" "checkout_web" { # ... }
+
+resource "aws_autoscaling_group" "checkout_web" {
+  name_prefix         = "checkout-web-"
+  vpc_zone_identifier = data.aws_subnets.default.ids
+  target_group_arns   = [aws_lb_target_group.checkout_web.arn]
+
+  min_size         = 2
+  max_size         = 6
+  desired_capacity = 2
+
+  health_check_type         = "ELB"
+  health_check_grace_period = 60
+
+  launch_template {
+    id      = aws_launch_template.checkout_web.id
+    version = "$Latest"
+  }
+}
+
+resource "aws_autoscaling_policy" "checkout_web_cpu" {
+  name                   = "checkout-web-target-tracking-cpu"
+  autoscaling_group_name = aws_autoscaling_group.checkout_web.name
+  policy_type            = "TargetTrackingScaling"
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 60
+  }
 }
 ```
 
-That's a real, honest first pass at "give me a bucket for build artifacts." It's not a strawman,
-it's what you get when you stop at the first thing that satisfies the sentence.
+That's a real, honest first pass at "give me an autoscaling web tier for our checkout service" (the
+full, unabridged file is `lab/vibe-coded/main.tf`, this is trimmed here for the security groups and
+load balancer boilerplate, which aren't the point). It's not a strawman. It's a competent-looking
+build: an ALB, two security groups, a launch template with real `user_data`, an ASG, a target
+tracking policy. Nobody would flag it in a five-second glance at a PR. That's exactly the danger.
+
+## Five judgment calls, one ticket, two real answers
+
+Both modules trace back to the same seven words. Neither is broken HCL. Read the real values,
+captured straight from `terraform plan`/`terraform state show` on each module:
+
+`file: lab/evidence/plan-diff.txt`
+```
+                          vibe-coded          spec-driven         driven by
+health_check_grace_period 60                  180                 FR-001 / SC-001
+termination_policies      (unset, AWS default) OldestLaunchTemplate, OldestInstance, Default
+                                                                    FR-002 / SC-002
+min_size / max_size       2 / 6               2 / 4               FR-003 / SC-003
+target_value (CPU %)      60                  55                  FR-004 / SC-004
+default_cooldown          (unset, 300s default) 90                FR-004 / SC-004
+metadata_options.http_tokens (unset, IMDSv1 allowed) required     FR-005 / SC-005
+```
+
+Every row is a real judgment call the one-line ticket left silent. Nothing in "give me an
+autoscaling web tier" says any of these numbers. The vibe-coded run didn't fail, it just picked
+something plausible-looking for each one and moved on, exactly what answering a spec-less ask under
+a deadline looks like. `60` seconds sounds fine until you remember `dnf install` on a cold mirror
+can run past a minute by itself, at which point the ASG kills a perfectly healthy instance for
+taking too long to boot, then keeps doing it, because the replacement hits the same clock.
+
+**Observe** one more thing the diff shows that the spec never asked for: the vibe-coded run also
+free-associated a whole ALB, two security groups, and a target group the ticket never mentioned and
+the spec never required. A spec doesn't just pin down ambiguous numbers, it bounds scope too.
 
 ## Run checkov against both
 
@@ -147,7 +307,7 @@ checkov -d lab/spec-driven --compact --quiet
 
 `[ Expected output ]`
 ```
-Passed checks: 11, Failed checks: 5, Skipped checks: 0
+Passed checks: 7, Failed checks: 1, Skipped checks: 0
 ```
 
 ```
@@ -156,24 +316,23 @@ checkov -d lab/vibe-coded --compact --quiet
 
 `[ Expected output ]`
 ```
-Passed checks: 5, Failed checks: 7, Skipped checks: 0
+Passed checks: 20, Failed checks: 14, Skipped checks: 0
 ```
 
-Read both finding lists (`lab/evidence/checkov-spec-driven.txt` and
-`checkov-vibe-coded.txt` have the full real output). The vibe-coded version fails on
-`CKV_AWS_21` (no versioning), `CKV2_AWS_6` (no public access block), and `CKV_AWS_145`, exactly
-the things FR-001 through FR-003 named up front. The spec-driven version passes every check that
-traces back to one of its own requirements.
+Read both finding lists (`lab/evidence/checkov-spec-driven.txt` and `checkov-vibe-coded.txt` have
+the full real output). The vibe-coded version fails `CKV_AWS_79`, IMDSv1 left reachable, exactly
+what FR-005 named up front, plus nine more real findings on the ALB nobody asked for: no deletion
+protection, no access logging, no WAF, HTTP instead of HTTPS, no TLS 1.2 minimum. The spec-driven
+version passes `CKV_AWS_79`, exactly what SC-006 promised.
 
-**Observe** something else, though: the spec-driven version still has 5 failed checks. `checkov`
-also flags event notifications, a lifecycle configuration, access logging, cross-region
-replication, and KMS-specifically-required encryption, none of which this spec's author (you) put
-in the requirements list. **Why?** Because a spec's acceptance criteria only cover what someone
-thought to write down. That's not a flaw in spec-driven work, it's exactly why the policy gate in
-M09 still runs after this. A spec shapes what gets generated. It doesn't replace the check that
-runs afterward.
+**Observe** something else, though: the spec-driven version still has 1 failed check,
+`CKV_AWS_153`, the launch template's own tags. Checkov flags it because this spec's author (you)
+never wrote a requirement for tags. **Why does that matter?** Because a spec's success criteria
+only cover what someone thought to write down. That's not a flaw in spec-driven work, it's exactly
+why the policy gate in M09 still runs after this. A spec shapes what gets generated. It doesn't
+replace the check that runs afterward.
 
-## Apply both, for real, and see what nothing stops
+## Apply the spec-driven module, for real, and check it against its own spec
 
 Start Floci the usual way:
 
@@ -183,82 +342,83 @@ docker run -d --name floci -p 4566:4566 \
   floci/floci:1.7.0
 ```
 
-**Apply** the spec-driven module and check the real state against SC-001 through SC-004:
+**Apply** it and read the real state back against SC-001 through SC-004:
 
 ```
 cd lab/spec-driven
 terraform apply -auto-approve
-terraform state show aws_s3_bucket_versioning.artifacts
-terraform state show aws_s3_bucket_public_access_block.artifacts
+terraform state show aws_autoscaling_group.checkout_web
 ```
 
 `[ Expected output ]`
 ```
-    versioning_configuration {
-        status     = "Enabled"
+# aws_autoscaling_group.checkout_web:
+resource "aws_autoscaling_group" "checkout_web" {
+    default_cooldown                 = 90
+    health_check_grace_period        = 180
+    health_check_type                = "EC2"
+    max_size                         = 4
+    min_size                         = 2
+    name                             = "checkout-web-asg"
+    termination_policies             = [
+        "OldestLaunchTemplate",
+        "OldestInstance",
+        "Default",
+    ]
+
+    launch_template {
+        id      = "lt-40425f188032c576b"
+        version = "$Latest"
     }
-    block_public_acls       = true
-    block_public_policy     = true
-    ignore_public_acls      = true
-    restrict_public_buckets = true
+}
 ```
 
-Now **apply** the vibe-coded one too:
+Every value in the running infrastructure matches the success criterion it was written against.
+That's not a coincidence. It's what "generate against a spec" is supposed to buy you, verified
+against the real applied state, not just the HCL that produced it.
+
+**Destroy** it before you're done, there's nothing here worth leaving up:
 
 ```
-cd ../vibe-coded
-terraform apply -auto-approve
-```
-
-`[ Expected output ]`
-```
-Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
-```
-
-Read that again. Nothing stopped it. No gate, no policy check, ran between "by feel" and a real
-bucket existing with no versioning, no public-access-block, and no encryption. `apply` doesn't
-care whether you wrote a spec. Only a downstream check does, which is exactly M06 and M09's job,
-not this module's.
-
-**Destroy** both before you're done, there's nothing here worth leaving up:
-
-```
-terraform destroy -auto-approve
-cd ../spec-driven
 terraform destroy -auto-approve
 docker rm -f floci
 ```
 
 `[ Expected output ]`
 ```
-Destroy complete! Resources: 4 destroyed.
+Destroy complete! Resources: 3 destroyed.
 ```
 
 #### Exercise
 
 Write your own spec for a real, underspecified ask from your own backlog: requirements,
-constraints, and acceptance criteria, before you generate anything. Then generate against it and
-check the output line by line against your own acceptance criteria, not by eyeballing it.
+constraints, and success criteria, before you generate anything. Then generate against it, and
+check the output line by line against your own criteria, not by eyeballing it. Pick something with
+at least three real judgment calls, not one obvious setting, or the exercise won't teach you what
+this lab just did.
 
 #### Summary
 
-You wrote a real spec, generated a module that traces every line back to a requirement, and
-compared it against the same ticket answered by feel. The spec-driven version passed every check
-tied to its own requirements. The vibe-coded version failed seven, and nothing stopped either one
-from applying. A spec makes the proposal better. It's still the pipeline, the gate in M06 and the
-policy check in M09, that decides whether `apply` was ever safe to run. You'll need that spec
-habit again in the capstone, where nobody hands you a one-line ticket at all.
+You wrote a real spec for an autoscaling tier with five genuine ambiguities, generated a module
+that traces every line back to a requirement, applied it for real and confirmed the running state
+matched every success criterion, then compared it against the same ticket answered by feel. The
+vibe-coded version wasn't broken, it was plausible, complete-looking, and quietly wrong on five real
+decisions plus a whole unrequested surface area checkov found nine more problems on. The
+spec-driven version passed everything tied to its own requirements and still had one honest gap
+outside them. A spec makes the proposal better and bounds what gets built. It's still the pipeline,
+the gate in M06 and the policy check in M09, that decides whether `apply` was ever safe to run.
+You'll need that spec habit again in the capstone, where nobody hands you a one-line ticket at all.
 
 ##### Reading List
 
 - [GitHub Spec Kit](https://github.com/github/spec-kit)
-- [Checkov S3 policies](https://www.checkov.io/5.Policy%20Index/terraform.html)
+- [Checkov EC2/ASG policies](https://www.checkov.io/5.Policy%20Index/terraform.html)
 - `reading/concepts.md` in this module: why vibe coding specifically fails on infrastructure, not
   just why it's messy
 
 ##### Search Keywords
 
 - spec-driven development, Spec Kit, Kiro specs
-- requirements, constraints, acceptance criteria
+- requirements, constraints, success criteria
 - vibe coding
-- checkov, S3 bucket policies, public access block
+- checkov, autoscaling groups, launch templates, IMDSv2
