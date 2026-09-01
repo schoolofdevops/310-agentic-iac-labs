@@ -4,8 +4,10 @@
 `labs/shared/floci-spike/provider.tf`, same rules as every Tier 1 lab in this course.
 
 M04 gave you a skill. M05 gave you a live MCP connection. M06 gave you a hook. Today you **assemble**
-them into one thing: a harness that will not let an agent claim a check passed unless the real
-output backing that claim is actually there.
+them into one thing: a harness built on the superpowers pattern, three real disciplines, not one.
+You'll run all three for real: verification-before-claiming (a hook that blocks an unbacked
+claim), test-first (a real RED-GREEN cycle against a Terraform module), and root-cause debugging
+(a real bug, three real wrong fixes, then the real root cause).
 
 ## Pre Requisites
 
@@ -153,6 +155,193 @@ terraform apply -auto-approve
 terraform destroy -auto-approve
 ```
 
+## Test-first: RED before GREEN, for real
+
+The second superpowers discipline. Not "write a test at some point," the iron law: no fix without
+a failing test first, and you have to watch it fail for the right reason before you write a single
+line of the fix.
+
+```
+cd ~/m08-lab
+cp -r modules/module-08-harness-engineering/lab/tdd .
+cd tdd
+```
+
+`file: tdd/main.tf` is the same bucket, no encryption yet. `file: tdd/test_encryption.sh` is the
+test, written **before** the fix exists, checking one real thing: `CKV_AWS_145`, the S3
+default-encryption check.
+
+**RED.** Run it against the unfixed bucket:
+
+```
+./test_encryption.sh
+```
+
+`[ Expected output ]`
+```
+RED: aws_s3_bucket.artifacts is not encrypted yet
+Check: CKV_AWS_145: "Ensure that S3 buckets are encrypted with KMS by default"
+	FAILED for resource: aws_s3_bucket.artifacts
+	File: /main.tf:32-38
+```
+
+`Exit code 1`. Read that output before you touch anything. It didn't fail because of a typo or a
+missing file, it failed because the real check is real. That's what "verify RED" means, confirm the
+test fails for the reason you expect, not any reason.
+
+**GREEN.** Now write the minimal fix, an `aws_s3_bucket_server_side_encryption_configuration`
+resource:
+
+```
+resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "aws:kms"
+    }
+  }
+}
+```
+
+Add that block to `tdd/main.tf` (or copy `tdd/solution/main.tf`), then rerun the exact same test:
+
+```
+./test_encryption.sh
+```
+
+`[ Expected output ]`
+```
+GREEN: aws_s3_bucket.artifacts is encrypted with a default KMS key
+```
+
+`Exit code 0`. Same script, same check, only the module changed. **Refactor** is the third step of
+the cycle and it's honest to skip it here, five lines of HCL have nothing worth cleaning up. Don't
+add a refactor step just to look complete, a real refactor step exists to remove duplication or
+improve names, not to pad a lab.
+
+## Root-cause debugging: the 3-Fix Rule, for real
+
+The third discipline. `lab/debug/main.tf` has a real bug, not staged: it uses `endpoint_url`, the
+argument name Floci's own README shows. `CLAUDE.md`'s own retired-tools table already flags this,
+you're about to see why it's flagged.
+
+```
+cd ~/m08-lab
+cp -r modules/module-08-harness-engineering/lab/debug .
+cd debug
+terraform init -backend=false -input=false >/dev/null
+terraform validate
+```
+
+`[ Expected output ]`
+```
+Error: Unsupported argument
+
+  on main.tf line 21, in provider "aws":
+  21:   endpoint_url = "http://localhost:4566"
+
+An argument named "endpoint_url" is not expected here.
+```
+
+That's the symptom. Now three real, plausible, wrong fixes, the ones an engineer under pressure
+actually reaches for.
+
+**Attempt 1, assume it's a provider-version mismatch.** Pin an exact version, reinit:
+
+```
+sed -i.bak 's/version = "~> 6.0"/version = "6.15.0"/' main.tf
+rm -rf .terraform .terraform.lock.hcl && terraform init -backend=false -input=false >/dev/null
+terraform validate
+```
+
+`[ Expected output ]`
+```
+Error: Unsupported argument
+  on main.tf line 21, in provider "aws":
+  21:   endpoint_url = "http://localhost:4566"
+An argument named "endpoint_url" is not expected here.
+```
+
+Same error. Wrong hypothesis. `mv main.tf.bak main.tf` to undo it.
+
+**Attempt 2, assume it's a stale cache.** Wipe `.terraform` and the lock file, reinit clean:
+
+```
+rm -rf .terraform .terraform.lock.hcl && terraform init -backend=false -input=false >/dev/null
+terraform validate
+```
+
+`[ Expected output ]`
+```
+Error: Unsupported argument
+  on main.tf line 21, in provider "aws":
+  21:   endpoint_url = "http://localhost:4566"
+An argument named "endpoint_url" is not expected here.
+```
+
+Same error again. Wrong hypothesis.
+
+**Attempt 3, guess the argument is just misnamed.** Try `endpoints_url`:
+
+```
+sed -i.bak2 's/endpoint_url = /endpoints_url = /' main.tf
+rm -rf .terraform .terraform.lock.hcl && terraform init -backend=false -input=false >/dev/null
+terraform validate
+```
+
+`[ Expected output ]`
+```
+Error: Unsupported argument
+  on main.tf line 21, in provider "aws":
+  21:   endpoints_url = "http://localhost:4566"
+An argument named "endpoints_url" is not expected here.
+```
+
+Still an unsupported argument, different name, same shape of failure. **This is the 3-Fix Rule.**
+Three attempts, three failures, each one a different guess at the same wrong layer. Debugging's own
+rule says stop here and question the architecture, not attempt a fourth guess.
+
+**Stop and compare against a known-working example**, the actual root-cause move: `undo` both
+sed edits, then diff this file's provider block against
+`labs/shared/floci-spike/provider.tf`, the stub every Tier-1 lab in this course already uses. The
+real difference isn't a version or a typo, it's the shape: AWS's provider doesn't take a flat
+`endpoint_url` string at all, it takes a structured `endpoints {}` block, one key per service.
+
+```
+mv main.tf.bak main.tf
+```
+
+`edit file: debug/main.tf`, replace the broken line with the real shape (or copy
+`lab/debug/solution/main.tf`):
+
+```
+  endpoints {
+    s3 = "http://localhost:4566"
+  }
+```
+
+```
+rm -rf .terraform .terraform.lock.hcl && terraform init -backend=false -input=false >/dev/null
+terraform validate
+```
+
+`[ Expected output ]`
+```
+Success! The configuration is valid.
+```
+
+**Apply and destroy against real Floci**, proof the root-cause fix actually works, not just that
+`validate` stopped complaining:
+
+```
+terraform apply -auto-approve
+terraform destroy -auto-approve
+```
+
+Three wrong guesses is not wasted time, it's the evidence that rules out the wrong layer before you
+question the architecture. A fourth guess without that evidence is what debugging's iron law
+exists to stop.
+
 #### Exercise
 
 Write a hook, or extend this one, for a discipline your own team skips under deadline pressure.
@@ -161,21 +350,26 @@ block anything, it isn't a hook yet, it's a comment.
 
 #### Summary
 
-You assembled a harness out of pieces you already had: a skill that states the rule, a hook that
-enforces it whether or not the rule gets read carefully. You watched an unbacked claim slip through
-with no harness, then watched the same shape of claim get blocked and passed depending on nothing
-but the evidence attached to it. This is what M12 needs to be true before it's safe to let an agent
-loop unattended: a broken harness looped just repeats its mistakes faster.
+You ran all three superpowers disciplines for real, not as prose. Verification-before-claiming: an
+unbacked claim blocked, the same shape of claim passed once real evidence sat next to it.
+Test-first: a real check that failed for the right reason before the fix existed, and passed for
+the right reason after. Root-cause debugging: three real wrong fixes, each ruling out a layer, then
+a real root cause found by comparing against a known-working example, applied and destroyed against
+real Floci. This is what M12 needs to be true before it's safe to let an agent loop unattended: a
+broken harness looped just repeats its mistakes faster.
 
 ##### Reading List
 
 - [Checkov docs: S3 bucket checks](https://www.checkov.io/5.Policy%20Index/terraform.html)
 - `reading/concepts.md` in this module: the superpowers pattern in full, and why harness and
   context are different diagnoses for different symptoms
+- `~/.claude/superpowers/tdd.md`, `verification.md`, `debugging.md`: the source discipline this
+  lab's three exercises are built from
 
 ##### Search Keywords
 
 - harness engineering, assembled harness
 - verification-before-claiming, test-first, root-cause debugging
+- red-green-refactor, the 3-Fix Rule
 - Claude Code hooks, Stop hook, PreToolUse hook
-- checkov, CKV_AWS_21, CKV2_AWS_6
+- checkov, CKV_AWS_21, CKV2_AWS_6, CKV_AWS_145
