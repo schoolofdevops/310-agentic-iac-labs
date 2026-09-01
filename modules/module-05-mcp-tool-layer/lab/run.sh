@@ -49,5 +49,43 @@ assert opened['number'] == closed['number']
 print(f\"    ok, PR #{opened['number']} opened then closed, never merged\")
 " || fail "PR evidence"
 
+echo "==> evidence: Terraform MCP was really asked about aws_db_parameter_group"
+grep -qi "family" evidence/param-group-mcp-answer.txt || fail "param-group-mcp-answer.txt doesn't mention the family argument"
+grep -qi "mysql8" evidence/param-group-mcp-answer.txt || fail "param-group-mcp-answer.txt doesn't land on mysql8.0"
+echo "    ok"
+
+echo "==> evidence: aws-iac-mcp-server was really attempted, and honestly failed to start"
+grep -q "ModuleNotFoundError\|TypeError" evidence/aws-iac-mcp-server-attempt.txt || fail "attempt evidence doesn't show a real crash"
+echo "    ok, this module doesn't paper over an immature dependency, it shows you the real failure"
+
+echo "==> the RDS-with-parameter-group module: real Floci apply, real destroy"
+if ! curl -fsS http://localhost:4566/_floci/health >/dev/null 2>&1; then
+  fail "Floci isn't running on :4566 — start it first: docker compose -f ../../../labs/shared/docker-compose.floci.yml up -d"
+fi
+cd module
+terraform init -input=false -upgrade=false >/tmp/m05-init.log 2>&1 || fail "terraform init: $(tail -20 /tmp/m05-init.log)"
+terraform apply -auto-approve -input=false >/tmp/m05-apply.log 2>&1 || fail "terraform apply: $(tail -30 /tmp/m05-apply.log)"
+grep -q "Apply complete" /tmp/m05-apply.log || fail "apply did not report complete"
+echo "    ok, applied"
+
+terraform show -json > /tmp/m05-run-show.json
+python3 -c "
+import json
+d = json.load(open('/tmp/m05-run-show.json'))
+res = {r['address']: r for r in d['values']['root_module']['resources']}
+pg_name = res['aws_db_parameter_group.app']['values']['name']
+db_pg   = res['aws_db_instance.app']['values']['parameter_group_name']
+assert db_pg == pg_name, f'db instance parameter_group_name={db_pg} does not match the real parameter group {pg_name}'
+params = res['aws_db_parameter_group.app']['values']['parameter']
+names = {p['name'] for p in params}
+assert 'slow_query_log' in names, f'expected a real non-default parameter, got {names}'
+print(f'    ok, aws_db_instance.app really wired to parameter group {pg_name} ({sorted(names)})')
+" || fail "parameter group wiring check"
+
+terraform destroy -auto-approve -input=false >/tmp/m05-destroy.log 2>&1 || fail "terraform destroy: $(tail -30 /tmp/m05-destroy.log)"
+grep -q "Destroy complete" /tmp/m05-destroy.log || fail "destroy did not report complete"
+echo "    ok, destroyed"
+cd ..
+
 echo
-echo "LAB PASSED — terraform MCP image real and responsive, config valid, captured evidence shows a real stale-vs-live gap and a real opened-then-closed PR"
+echo "LAB PASSED — terraform MCP image real and responsive, config valid, captured evidence shows a real stale-vs-live gap, a real aws_db_parameter_group lookup, a real (and honestly failed) aws-iac-mcp-server attempt, an opened-then-closed PR, and a real applied-then-destroyed RDS-with-parameter-group module"

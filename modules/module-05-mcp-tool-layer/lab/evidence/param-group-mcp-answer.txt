@@ -1,0 +1,7 @@
+Got doc from MCP (`hashicorp/aws`, provider_doc_id 13381225, provider v6.62.0).
+
+**Required arg**: only `family` — "(Required, Forces new resource) The family of the DB parameter group." Everything else optional (`name`, `name_prefix`, `description`, `parameter`, `skip_destroy`, `tags`, `region`).
+
+**MySQL 8.0 family value**: doc no give explicit "mysql8.0" example (samples show `mysql5.6`, `mysql5.7`, `postgres13`). AWS naming pattern from those examples: `mysql<major.minor>` → **`mysql8.0`**. Not literal tool output, inferred from pattern — verify via `aws rds describe-db-engine-versions --engine mysql` if precision matters.
+
+Note: `parameter` block also (Required for entries) needs `name`+`value`; `apply_method` optional, default `immediate`.

@@ -1,0 +1,35 @@
+Real captured output, `uvx awslabs.aws-iac-mcp-server@latest --help`, run while building this lab:
+
+$ uvx awslabs.aws-iac-mcp-server@latest --help
+Downloading cryptography (3.8MiB)
+Downloading cfn-lint (5.1MiB)
+Downloading pydantic-core (1.8MiB)
+Downloading botocore (15.0MiB)
+Downloading guardpycfn (1.2MiB)
+Downloading beartype (1.3MiB)
+ Downloaded beartype
+ Downloaded guardpycfn
+ Downloaded pydantic-core
+ Downloaded cryptography
+ Downloaded cfn-lint
+ Downloaded botocore
+Installed 86 packages in 422ms
+Traceback (most recent call last):
+  File ".../bin/awslabs.aws-iac-mcp-server", line 6, in <module>
+    from awslabs.aws_iac_mcp_server.server import main
+  File ".../site-packages/awslabs/aws_iac_mcp_server/server.py", line 19, in <module>
+    from .client.mcp_proxy import create_local_proxied_tool, get_remote_proxy_server_tool
+  File ".../site-packages/awslabs/aws_iac_mcp_server/client/mcp_proxy.py", line 18, in <module>
+    from fastmcp.server.proxy import ProxyClient
+ModuleNotFoundError: No module named 'fastmcp.server.proxy'
+
+Retried pinning an older fastmcp explicitly, same package:
+
+$ uv tool run --with "fastmcp==2.9.0" awslabs.aws-iac-mcp-server@latest --help
+...
+TypeError: cannot specify both default and default_factory
+
+Two different real crashes, two different real attempts. The package genuinely
+installs (86 real packages, a real dependency tree: cfn-lint, botocore, a real
+CDK/CloudFormation-shaped guard library). It does not genuinely start, in a
+clean environment, on the day this lab was built.
