@@ -37,32 +37,45 @@ beyond what Lab 1 already needed, plus the agent CLI itself.
 ## Two real dials: which tools, and how much permission
 
 Before you run anything, know what you're actually turning on and off. Claude Code gives you
-two separate controls, and this lab uses both.
+two separate controls: which tools the agent may call at all, and how much it can do with them
+without stopping to ask you.
 
-**`--allowedTools`** names which tools the agent may call at all. Leave it empty and the agent
-can only talk, it cannot touch your filesystem or run a command. Real tool names you'll see in
-this course: `Bash`, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `WebFetch`, `WebSearch`. You can
-scope a tool down instead of turning it fully on or off, `Bash(terraform *)` allows only
-commands starting with `terraform`, not an open shell. That's a real guardrail, not a toy, and
-it's the same idea M06 builds into a proper permission boundary later in this course.
+**Day to day, you won't set these with flags.** You'll type `claude` and land in an
+interactive session. The first time the agent wants to touch a file or run a command, it stops
+and asks: allow this once, allow it for the rest of this session, or deny it. Press
+**Shift+Tab** to cycle the session's permission mode right there in the prompt, normal ask-first,
+through auto-accepting edits, to plan mode. Type **`/permissions`** to open the actual
+allow/deny list and edit it directly, add `Bash(terraform *)` to let the agent run terraform
+commands without asking every single time, without handing it an open shell. If you want a
+session where nothing stops to ask at all, that's `claude --dangerously-skip-permissions`, and
+you reach for it with your eyes open, not by accident, the CLI's own help text says it plainly:
+recommended only for sandboxes with no internet access.
 
-**`--permission-mode`** controls what happens once a tool call is actually attempted. Six real
-values, run `claude --help` yourself to confirm this list hasn't drifted:
+That's the real day-to-day workflow, and it's worth trying right now before this lab moves on
+to anything scripted: run `claude`, ask it something small about this repo, watch the
+permission prompt actually appear, then press Shift+Tab and watch the mode indicator change.
 
-| Mode | What it does |
+**This lab's actual steps use `-p` and CLI flags instead, on purpose, not because that's how
+you'll normally work.** A lab has to be copy-pasteable and give the same result every time you
+run it, an interactive back-and-forth can't be scripted that way. `--allowedTools` is the
+non-interactive equivalent of the allow/deny list `/permissions` edits for you; leave it empty
+and the agent can only talk, it can't touch your filesystem or run a command at all.
+`--permission-mode` is the non-interactive equivalent of the Shift+Tab cycle, six real values,
+run `claude --help` yourself to confirm this list hasn't drifted:
+
+| Mode | Interactive equivalent |
 |---|---|
-| `manual` / `auto` | Ask before each tool call that needs confirmation (the interactive default) |
-| `acceptEdits` | File edits are applied without asking, other tools still confirm |
-| `plan` | The agent writes a plan and stops, it does not touch a single file until you say go |
-| `dontAsk` | Skip confirmation for most tools, still respects `--allowedTools` |
-| `bypassPermissions` | No confirmation, no `--allowedTools` boundary either. The CLI's own help text says it plainly: recommended only for sandboxes with no internet access |
+| `manual` / `auto` | The normal ask-before-each-tool-call default |
+| `acceptEdits` | Shift+Tab once, into auto-accept-edits |
+| `plan` | Shift+Tab again, into plan mode |
+| `dontAsk` | Fewer prompts, still respects `--allowedTools`/`/permissions` |
+| `bypassPermissions` | `claude --dangerously-skip-permissions`, no boundary at all |
 
-You don't need all six today. Step 1 below runs with `--allowedTools ""`, no tools at all,
-that's the "suggest" behavior. Step 2 runs with `--allowedTools "Write,Edit"` and the
-interactive default permission handling, that's "draft." `plan` mode is previewed later in
-this lab, it's the real mechanism behind step 3 on the ladder, properly taught starting M04.
-`bypassPermissions` isn't used anywhere in this course before you understand exactly what it
-removes.
+Step 1 below uses `--allowedTools ""`, the scripted version of never granting anything, that's
+the "suggest" behavior. Step 2 uses `--allowedTools "Write,Edit"`, the scripted version of
+allowing edits, that's "draft." `plan` mode is previewed later in this lab, it's the real
+mechanism behind step 3 on the ladder, properly taught starting M04. `bypassPermissions` isn't
+used anywhere in this course before you understand exactly what it removes.
 
 ## The intent, again
 
