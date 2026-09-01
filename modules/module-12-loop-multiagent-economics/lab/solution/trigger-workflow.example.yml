@@ -1,0 +1,12 @@
+name: m12-loop-trigger-example
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+jobs:
+  run-loop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: run the stopping-condition loop once
+        run: bash lab/solution/loop.sh work
