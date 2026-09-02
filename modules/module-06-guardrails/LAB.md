@@ -33,7 +33,32 @@ docker info
 
 ## Stage 1: Block a dangerous delete with a mechanical gate
 
-### Step 1: Set up the starting infrastructure
+### Step 1: Write a Task Contract
+
+Before the starting infrastructure exists, before any agent touches this module,
+write down what it is and isn't allowed to do. **Copy** the template:
+
+```
+cp lab/task-contract-template.md lab/task-contract.md
+```
+
+**Fill it in** for the dangerous-delete scenario this stage builds: the agent will
+be asked to manage a real S3 bucket, including deletes, in a scratch AWS account
+emulated by Floci. Write the four fields for real, specific to this task, not
+generic boilerplate:
+
+- Allowed tools: name them exactly (`Read`, `Bash(terraform plan)`, `Bash(terraform
+  apply)`, whatever this stage's later steps actually grant)
+- Forbidden actions: name the one this stage is about, deleting a bucket that
+  still holds data, in plain words
+- Required evidence: what proof would actually convince you the delete was safe
+- Stop condition: what makes this task done
+
+Keep this file open. Later in this stage, after the mechanical gate blocks a real
+delete, come back to it and mark which of your four fields the gate actually
+enforced, versus which ones only ever existed on this piece of paper.
+
+### Step 2: Set up the starting infrastructure
 
 `file: lab/module/main.tf`
 ```
@@ -97,7 +122,7 @@ Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
 
 Two real buckets, in a real backend container, same as M04.
 
-### Step 2: Watch an ungated delete destroy real data
+### Step 3: Watch an ungated delete destroy real data
 
 An empty bucket getting deleted is easy to shrug off. **Put** something real in it first:
 
@@ -152,7 +177,7 @@ AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url http://loca
   s3 cp /tmp/app.log s3://m06-lab-logs/2026-08-30/app.log
 ```
 
-### Step 3: Write the gate
+### Step 4: Write the gate
 
 **Write** the piece that was missing: a script that reads a real `terraform plan`, in JSON, and
 decides whether it's safe to apply at all.
@@ -191,7 +216,7 @@ default). Exit 0 means safe to apply. Exit non-zero means refuse. `hooks/apply_w
 `terraform plan` → `terraform show -json` → this script → `terraform apply`, in that order, and
 never reaches `apply` if the gate exits non-zero.
 
-### Step 4: Watch the same delete get blocked
+### Step 5: Watch the same delete get blocked
 
 **Delete** the same `logs` bucket block again. This time, **apply** through the gate instead of
 directly:
@@ -230,7 +255,14 @@ log line, destroyed for good in run 1, still there in run 2.
 
 **Restore** the `logs` block once more before continuing.
 
-### Step 5: Confirm a safe change still passes
+**Reread** `lab/task-contract.md`. The mechanical gate you just watched work
+enforced exactly one of your four fields, mechanically, whether or not anyone
+reads the contract again. Write one line in `notes.md`: which of the other three
+fields (allowed tools, required evidence, stop condition) has no mechanical
+enforcement anywhere in this stage yet, and stays true only because someone reads
+it.
+
+### Step 6: Confirm a safe change still passes
 
 Not every gate is a wall. **Add** a small, non-destructive change, a new bucket:
 
@@ -261,7 +293,7 @@ everything, it's there to say no to the specific things that make infrastructure
 than application-code mistakes: no undo, blast radius, silent failure, the three properties from
 M01's reading.
 
-### Step 6: Add a permission boundary alongside the hook
+### Step 7: Add a permission boundary alongside the hook
 
 A hook decides whether a proposed *change* is safe. A permission boundary decides what the agent
 can even touch in the first place, before a plan exists at all. In this repo that's a Claude Code
