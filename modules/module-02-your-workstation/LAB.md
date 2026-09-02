@@ -1,19 +1,24 @@
-# Lab 2: Your Agentic IaC Workstation
+# Project 02: Build an Nginx Test Module Using Claude Code's Agent Modes
 
 **Tier 0** · ~15 min · no cloud account, no `terraform apply` required. Claude Code (or Codex),
 Terraform, and Checkov, all already in the devcontainer.
 
-## The project
-
-You are building one real thing in this lab: a local nginx test module, a container that
+In this project, you will build one real thing: a local nginx test module, a container that
 serves a static page you control, its rendered HTML kept on disk so you can diff it in git,
-extended later with a second page and a health-check endpoint. You build the same module
-five times over in this lab, and the intent never changes. What changes each time is how much
-of the work you hand to the agent, and how much permission it runs with. By the end you'll
-have a working module, a real bug you catch twice on your own, an audit run by a subagent, and
-this module's own check floor turned into a one-word slash command.
+later extended with a second page and a health-check endpoint. You will build the same module
+five times over, same intent every time. What changes each time is how much of the work you
+hand to the agent, and how much permission it runs with.
 
-Lab 1 had you run a generate-verify-fix loop by hand, no agent involved. This lab hands the
+**What you're building, at a glance:**
+
+- A working nginx module, typed as a suggestion, then written as a draft by the agent
+- A real bug caught twice, independently, by two different agent sessions
+- A preview of plan mode on a throwaway file, before the real thing lands in M04
+- The module extended under `acceptEdits` while you watch, applied and destroyed for real
+- A bounded audit delegated to a subagent, its narrower permissions doing their job
+- This module's own check floor turned into a one-word slash command
+
+M01 had you run a generate-verify-fix loop by hand, no agent involved. This project hands the
 first half of that loop, just the generating, to a real agent, on the same intent, so you feel
 the difference between step 1 and step 2 on the autonomy ladder instead of only reading about
 it.
@@ -32,7 +37,7 @@ or
 codex --version
 ```
 
-- Everything from Lab 1's pre-requisites still applies: `terraform`, `checkov`, and Docker
+- Everything from M01's pre-requisites still applies: `terraform`, `checkov`, and Docker
   reachable at `/var/run/docker.sock`.
 
 ```
@@ -41,8 +46,8 @@ checkov --version
 docker info
 ```
 
-If any of these fail, fix them before continuing. This module doesn't introduce anything
-beyond what Lab 1 already needed, plus the agent CLI itself.
+If any of these fail, fix them before continuing. This project doesn't introduce anything
+beyond what M01 already needed, plus the agent CLI itself.
 
 ## Two real dials: which tools, and how much permission
 
@@ -80,14 +85,14 @@ replacement for it.**
 
 ## The intent, again
 
-Same one-line prompt from Lab 1, on purpose. You already know what a good answer to it looks
-like, that's what makes the comparison in this lab meaningful:
+Same one-line prompt from M01, on purpose. You already know what a good answer to it looks
+like, that's what makes the comparison in this project meaningful:
 
 > Give me a local nginx container for testing, serving a static page I control, with its
 > rendered HTML kept on disk so I can diff it in git. No secrets in the container. I don't
 > need it exposed outside this machine.
 
-## Step 1: suggest, you type it
+## Step 1: Ask for a suggestion, no files written
 
 **Open** `claude` and ask it the intent above, plainly, the way you would in any real session.
 If it reaches for a tool to write a file, **deny** it right there at the permission prompt,
@@ -174,7 +179,7 @@ cd ~/m02-lab/step1-suggested
 
 Copy the block above into this file, however you'd normally do that, paste it, redirect the
 agent's raw output into it with `> main.tf`, whatever's fastest for you. Then run the syntax
-floor from Lab 1 on it:
+floor from M01 on it:
 
 ```
 terraform fmt -check -diff
@@ -272,7 +277,7 @@ that referenced `path.module` where Terraform doesn't allow it, and a relative p
 rejects at plan time. `terraform validate` caught the first, on its own it can't see the second,
 only `terraform plan` did. Both were yours to have caught either way.
 
-## Step 2: draft, the agent writes it
+## Step 2: Let the agent draft the file directly
 
 Same project, same intent, more trust. **Open** a fresh `claude` session in a new directory, same intent, and this time when the
 permission prompt appears asking to write `main.tf`, **approve** it. That's the whole
@@ -298,7 +303,7 @@ intent directly. Do not ask questions, just write the file. Intent: <paste the i
 --allowedTools "Write,Edit"
 ```
 
-**Read** `main.tf` before you do anything else with it, the same discipline Lab 1's `terraform
+**Read** `main.tf` before you do anything else with it, the same discipline M01's `terraform
 plan` step asked for. Then run the same syntax floor:
 
 ```
@@ -361,7 +366,7 @@ actual lesson of step 2, sharper than the version of it you'd have gotten by sto
 `validate`. Read every line anyway, every time, and run `plan`, every time, that's the whole
 lesson.
 
-## Preview: what plan mode actually does
+## Step 3: Preview plan mode on a throwaway file
 
 A third posture, on a throwaway file, not the project itself. Step 2 let the agent write a
 file straight away. There's a real middle setting between "just talk" and "just write."
@@ -386,10 +391,10 @@ claude -p "A single local_file resource writing 'hello' to hello.txt. Propose th
 ```
 
 `ls` the directory afterward. No `hello.txt`, no `main.tf`, nothing got written. Instead, the
-agent produced a real plan document, saved under `~/.claude/plans/`, roughly shaped like this
-(your exact wording will differ, plan mode isn't deterministic, the shape is what matters):
+agent produced a real plan document, saved under `~/.claude/plans/`, in roughly this pattern
+(your exact wording will differ, plan mode isn't deterministic, the pattern is what matters):
 
-`[ Expected output shape ]`
+`[ Approximate output ]`
 ```
 # Plan: hello.txt via local_file
 
@@ -406,7 +411,7 @@ agent produced a real plan document, saved under `~/.claude/plans/`, roughly sha
 That's the real mechanism behind step 3 on the ladder, propose with plan: the agent hands you
 a plan, not a fait accompli, and waits for you to say go. This course teaches step 3 properly
 starting M04, once there's a real skill and a real repo convention for the agent to plan
-against. For now, just notice the shape: step 1 gave you text with no structure, step 2 gave
+against. For now, just notice the pattern: step 1 gave you text with no structure, step 2 gave
 you a finished file, step 3 gives you a reviewable plan, ordered by how much it commits before
 you've said yes to anything.
 
@@ -526,10 +531,10 @@ cd ~/m02-lab/step2-drafted && checkov -d .
 Exit code: 0
 ```
 
-Same gap from Lab 1: no secrets, and neither `docker_container` nor `local_file` has built-in
+Same gap from M01: no secrets, and neither `docker_container` nor `local_file` has built-in
 Checkov coverage, so a clean exit here means "found nothing to flag," not "audited and safe."
 
-## `acceptEdits`: the agent extends it while you watch
+## Step 4: Extend the module under `acceptEdits`
 
 Back to the real project, now grown, not rebuilt: this step takes step 2's fixed module and
 extends it. Step 2 approved one file write, once. `acceptEdits` mode keeps every future edit
@@ -573,8 +578,8 @@ Done. main.tf now:
 That's a real, captured response. First, check what `acceptEdits` didn't skip: **read** the new
 `main.tf`. Did the agent keep the `abspath()` convention your fix already established for
 `local_file.index_html`, or did it drop back to a raw `path.module` reference on the two new
-resources? `acceptEdits` means it stopped asking, it doesn't mean it stopped needing to be
-checked, that's the whole judgment call this step exists to force:
+resources? `acceptEdits` means it stopped asking. It does not mean it stopped needing to be
+checked. Confirm it yourself:
 
 ```
 terraform fmt -check -diff
@@ -614,7 +619,7 @@ Whatever you see, write it in this step's line of your exercise notes below, a r
 a predicted one. This is exactly the gap `acceptEdits` leaves open: it removes the per-edit
 prompt, it does not remove the need to actually run the thing.
 
-## Delegating a bounded task to a subagent
+## Step 5: Delegate a bounded audit to a subagent
 
 Auditing the project you just built, not adding to it. Not everything you'd check is worth
 doing inline. A subagent runs in its own isolated context,
@@ -654,13 +659,12 @@ Audit done, read-only.
 ```
 
 That's a real, captured, unedited transcript, checkov call and all. The subagent's checkov
-attempt got blocked, its own tool permissions didn't extend as far as the pattern I'd granted
-the parent session, and instead of guessing at an answer it said so and told me to run it
-myself. That's not a bug in this lab, it's the actual point: a subagent inherits an isolated,
-narrower surface, not a blank check on your permissions, the same discipline module 6 turns
-into a formal gate.
+attempt got blocked, its own tool permissions didn't extend as far as the pattern granted to
+the parent session, and instead of guessing at an answer it said so and told you to run it
+yourself. A subagent inherits an isolated, narrower surface, not a blank check on your
+permissions. That is by design, and module 6 turns it into a formal gate.
 
-## A slash command for this module's own floor
+## Step 6: Turn the check floor into a slash command
 
 One last thing the project's own repo can carry: its own check floor, as a command anyone
 opening it can run. You've now typed `fmt`, `init`, `validate`, `plan` by hand four times in
@@ -726,40 +730,47 @@ Write a short note, in your own words, in a file called `notes.md` next to your 
   be true before you'd loosen it? `bypassPermissions` exists too, you didn't use it here, say
   why not.
 
-Keep the file, same as Lab 1's note, you'll compare it against your capstone answer.
+Keep the file, same as M01's note, you'll compare it against your capstone answer.
 
-#### Summary
+## Validation
 
-You built one project, the local nginx test module, five times over: typed as a suggestion,
-written as a draft, extended under `acceptEdits` while you watched, audited by a subagent, and
-finally given its own one-word check floor. Same intent throughout, only the posture changed.
-The core three, suggest, draft, `acceptEdits`, are on the autonomy ladder from module 1, steps
-1 and 2, the ones where you keep the most direct control. Along the way you found a real bug
-two independent agent sessions both
-made the same way, one `terraform validate` couldn't see and only `terraform plan` caught, which
-is the actual argument for running your whole floor, every time, not just the parts that feel
-like they'd catch something. You also delegated a bounded check to a subagent and watched its
-narrower permissions do their job, and you turned this module's own floor into a slash command
-so it doesn't have to be re-typed. Module 3 is where you start giving the agent standing
-context, `CLAUDE.md` and `AGENTS.md`, so a fact like "wrap `path.module` file paths in
-`abspath()` for Docker" gets written down once instead of rediscovered by hand.
+Run the full check yourself, all three module versions, against real Terraform and Checkov:
 
-##### Reading List
+```
+cd modules/module-02-your-workstation/lab
+./run.sh
+```
 
-- [Claude Code CLI reference](https://docs.claude.com/en/docs/claude-code/cli-reference)
-- [Claude Code subagents](https://docs.claude.com/en/docs/claude-code/sub-agents)
-- [Claude Code slash commands](https://docs.claude.com/en/docs/claude-code/slash-commands)
-- [Codex CLI documentation](https://developers.openai.com/codex/cli)
-- `reading/concepts.md` in this module: why two CLIs, what the devcontainer pins and why, the
-  full "what actually differed" finding, and the subagent/slash-command sections
-- `PROJECTS.md` in this module: a bonus Ansible project extending this same nginx module
+`run.sh` checks:
 
-##### Search Keywords
+- All three versions (`step1-suggested`, `step2-drafted`, `step3-acceptedits`) `fmt`,
+  `init`, and `validate` clean
+- All three `plan` clean, the check `validate` alone missed
+- Every `local_file`/`host_path` reference wraps `path.module` in `abspath()`, the real bug
+  this project found
+- All three are checkov-clean
+- Step 1 and step 2's files genuinely differ, the core finding this project depends on
+- The `tf-check` slash command exists and is well-formed
 
-- Claude Code, Codex CLI, devcontainer
-- step 1 suggest, step 2 draft, `acceptEdits`, plan mode preview, autonomy ladder
-- `--allowedTools`, `--permission-mode`, `acceptEdits`, `bypassPermissions`
-- subagents, Task tool, context isolation
+## Summary
+
+What you built:
+
+- One project, the local nginx test module, built five times over: typed as a suggestion,
+  written as a draft, extended under `acceptEdits` while you watched, audited by a subagent,
+  and given its own one-word check floor
+- A real bug, caught twice, independently, by two different agent sessions: `terraform
+  validate` never saw it, only `terraform plan` did
+- A bounded audit delegated to a subagent, its narrower permissions doing their job instead of
+  guessing past them
+- A slash command that turns a repeatable check into a fact the repo carries, not something
+  re-typed every session
+
+Same intent throughout, only the posture changed. Suggest, draft, and `acceptEdits` are the
+autonomy ladder's first two steps, from M01, the ones where you keep the most direct control.
+Module 3 is where you start giving the agent standing context, `CLAUDE.md` and `AGENTS.md`, so
+a fact like "wrap `path.module` file paths in `abspath()` for Docker" gets written down once
+instead of rediscovered by hand.
 - slash commands, `.claude/commands/`
 - terraform fmt, terraform validate, terraform plan
 - `path.module`, `abspath()`, absolute host paths, docker provider
