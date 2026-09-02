@@ -1,25 +1,26 @@
-# Lab 6: Three Ways to Stop a Dangerous Apply
+# Project 06: Guard a Real Delete Using a Hook and a Plan-Approve-Apply Harness
 
 **Tier 1** · ~40 min · Docker socket mounted, `floci/floci:1.7.0` pinned, real `terraform apply`
 and `destroy` against it, real Claude Code sessions in `--permission-mode plan`.
 
-**The project:** a small, real storage system, two S3 buckets, one of them holding a genuine log
-file, that an agent could delete for good with a single misread instruction. You build three
-independent guardrails around that one system and test all three against the exact same real
-delete, so you can see, on the same object, what each one costs and what each one actually stops.
+In this project, you will build two independent guardrails around one small, real storage
+system, two S3 buckets, one of them holding a genuine log file that an agent could delete for
+good with a single misread instruction. You will test both guardrails against the exact same
+real delete, so you can see, on the same object, what each one costs and what each one actually
+stops.
 
-M04 gave the agent a skill it could choose to reach for. That's still voluntary. This lab builds
-three things that don't depend on the agent deciding anything: a **mechanical gate** that reads a
-real plan and refuses a real delete, a one-paragraph preview of a **structural** guardrail that
-removes apply access from the agent entirely, and a **plan-review-approve-apply harness** you
-build yourself, wrapping the real `--permission-mode plan` mechanic M02 taught into a formal
-propose-then-approve workflow. You'll watch a real delete destroy a real object with no gate in
-the way, then watch the exact same delete get refused once the gate is wired in, then build a
-second, independent guardrail on top of it that a human has to approve before anything applies.
+**What you're building, at a glance:**
 
-By the end you'll have a small library of your own: `hooks/blast_radius_gate.sh` and
-`harness/{propose,approve,apply_with_approval}.sh`, three real scripts that stand between an agent
-and a real apply, all proven against the same bucket that started this lab.
+- A real delete, run with nothing in the way, that destroys a real log file for good
+- `hooks/blast_radius_gate.sh`, a **mechanical gate** that reads a real Terraform plan and
+  refuses a real delete
+- The exact same delete, run again, now blocked by that gate
+- A permission-boundary config that denies an agent's write tools on a path, before a plan
+  even exists
+- `harness/{propose,approve,apply_with_approval}.sh`, a **plan-review-approve-apply harness**
+  you build yourself, wrapping the real `--permission-mode plan` mechanic from M02 into a
+  formal propose-then-approve workflow, with a real human approval step that blocks apply
+  until it exists
 
 ## Pre Requisites
 
@@ -30,7 +31,9 @@ and a real apply, all proven against the same bucket that started this lab.
 docker info
 ```
 
-## The starting infrastructure
+## Stage 1: Block a dangerous delete with a mechanical gate
+
+### Step 1: Set up the starting infrastructure
 
 `file: lab/module/main.tf`
 ```
@@ -94,7 +97,7 @@ Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
 
 Two real buckets, in a real backend container, same as M04.
 
-## Run 1: no gate, watch a real delete destroy real data
+### Step 2: Watch an ungated delete destroy real data
 
 An empty bucket getting deleted is easy to shrug off. **Put** something real in it first:
 
@@ -149,7 +152,7 @@ AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url http://loca
   s3 cp /tmp/app.log s3://m06-lab-logs/2026-08-30/app.log
 ```
 
-## Write the gate
+### Step 3: Write the gate
 
 **Write** the piece that was missing: a script that reads a real `terraform plan`, in JSON, and
 decides whether it's safe to apply at all.
@@ -188,7 +191,7 @@ default). Exit 0 means safe to apply. Exit non-zero means refuse. `hooks/apply_w
 `terraform plan` → `terraform show -json` → this script → `terraform apply`, in that order, and
 never reaches `apply` if the gate exits non-zero.
 
-## Run 2: the same delete, the same real object, now blocked
+### Step 4: Watch the same delete get blocked
 
 **Delete** the same `logs` bucket block again. This time, **apply** through the gate instead of
 directly:
@@ -227,7 +230,7 @@ log line, destroyed for good in run 1, still there in run 2.
 
 **Restore** the `logs` block once more before continuing.
 
-## A safe change still passes
+### Step 5: Confirm a safe change still passes
 
 Not every gate is a wall. **Add** a small, non-destructive change, a new bucket:
 
@@ -258,7 +261,7 @@ everything, it's there to say no to the specific things that make infrastructure
 than application-code mistakes: no undo, blast radius, silent failure, the three properties from
 M01's reading.
 
-## A permission boundary, alongside the hook
+### Step 6: Add a permission boundary alongside the hook
 
 A hook decides whether a proposed *change* is safe. A permission boundary decides what the agent
 can even touch in the first place, before a plan exists at all. In this repo that's a Claude Code
@@ -279,10 +282,10 @@ settings file, not a Terraform concept:
 This is a config-level guardrail: the agent's write tools are denied on anything under `shared/`,
 enforced by the harness before the agent ever gets a chance to propose a change there, the same
 way the gate above is enforced before `apply`. This lab doesn't stage a live denied-write
-transcript, that depends on the specific agent runtime enforcing it, but the mechanism is the same
-shape as the hook: a rule that runs regardless of what the agent decided to do.
+transcript, that depends on the specific agent runtime enforcing it, but the mechanism works the
+same way as the hook: a rule that runs regardless of what the agent decided to do.
 
-## Mechanism two: stop asking whether the agent should apply
+## A second guardrail: take apply access away entirely
 
 The gate above answers "is this specific plan safe?" every single time, correctly, but it's still
 sitting downstream of a system where the agent has `apply` access at all. There's a structurally
@@ -291,19 +294,21 @@ anything real. It opens a PR instead. The PR runs through the same kind of check
 built, an automated review, a human merges it, and a separate GitOps controller, reconciling
 against the merged state of the repo, is the only thing that ever touches the real infrastructure.
 "Can this agent apply?" stops being a question the gate has to answer correctly every time, because
-the agent was never wired to `apply` in the first place. That's not a small variation on this
-lab's gate, it's a different shape of guardrail, structural instead of mechanical, and building it
-for real, with a real GitOps controller reconciling a real merged PR, is M11's job, not this
-module's. Hold onto the shape: gate the change, or remove the ability to make it unreviewed.
+the agent was never wired to `apply` in the first place. This is a different kind of guardrail from
+the gate above, structural instead of mechanical. Building it for real, with a real GitOps
+controller reconciling a real merged PR, is M11's job, not this project's. Two options: gate the
+change, or remove the ability to make it unreviewed.
 
-## Mechanism three: propose, review, approve, apply
+## Stage 2: Build a plan-review-approve-apply harness
 
 The gate blocks based on what a plan contains. It doesn't know who's asking, and it doesn't pause
 for a human to actually read the reasoning before something happens. M02 already showed you the
 real building block this needs: `claude --permission-mode plan` proposes a change and writes
-nothing, an agent hands you a plan document instead of a fait accompli. This lab turns that one
-flag into a small, real harness with four real steps, and an explicit refusal wired into the
-middle of it.
+nothing, an agent hands you a plan document instead of a fait accompli. This stage turns that one
+flag into a small, real harness with four steps, and an explicit refusal wired into the middle of
+it.
+
+### Step 1: Propose a change and save the plan
 
 `file: harness/propose.sh` (step a and b: a real agent proposes, a real plan gets saved)
 ```
@@ -342,7 +347,9 @@ PLAN_SAVED: plans/add-a-new-s3-squishy-metcalfe.md
 Plan mode really did write nothing. `module/main.tf` is untouched. What exists now is a plan file,
 under `plans/`, the same real artifact `--permission-mode plan` produces in M02, just copied
 somewhere your team can actually review it instead of a hidden home-directory path. Your filename
-will differ, plan mode's naming isn't deterministic, the shape is what matters.
+will differ, plan mode's naming isn't deterministic, the pattern is what matters.
+
+### Step 2: Try to apply without approval
 
 **Try** applying it anyway, before anyone approved it:
 
@@ -355,8 +362,11 @@ will differ, plan mode's naming isn't deterministic, the shape is what matters.
 REFUSED: plans/add-a-new-s3-squishy-metcalfe.md has not been approved. Run harness/approve.sh first.
 ```
 
-Exit code 1, `module/main.tf` still untouched. Step (c), the human gate, is not optional and not
-implicit, it's a file that has to exist:
+Exit code 1, `module/main.tf` still untouched.
+
+### Step 3: Approve the plan
+
+The human gate is not optional and not implicit, it's a file that has to exist:
 
 `file: harness/approve.sh`
 ```
@@ -385,7 +395,9 @@ echo "APPROVED: ${PLAN} (by ${APPROVER})"
 APPROVED: plans/add-a-new-s3-squishy-metcalfe.md (by gshah)
 ```
 
-**Apply** it now that the approval marker exists, step (d), the second real invocation, the only
+### Step 4: Apply the approved plan
+
+**Apply** it now that the approval marker exists. This is the second real invocation, the only
 one allowed to touch a file:
 
 ```
@@ -433,12 +445,13 @@ aws_s3_bucket.audit
 - A skill (M04) could have suggested caution. It could not have stopped the apply. Only something
   that runs regardless of the agent's choice can do that
 - The resource-type and resource-count checks generalize the same idea beyond deletes: some
-  changes are risky by shape, not by action type alone
-- Mechanism two doesn't try to out-think every dangerous plan, it just removes the agent's ability
-  to apply anything unreviewed in the first place. Different failure mode, different fix
-- Mechanism three doesn't replace the gate, it adds a second, independent question in front of it:
-  not "is this plan safe" but "did a specific human actually say yes to this specific plan." The
-  harness refused before approval existed, no matter how safe the plan looked
+  changes are risky by kind, not by action type alone
+- The structural guardrail doesn't try to out-think every dangerous plan, it just removes the
+  agent's ability to apply anything unreviewed in the first place. Different failure mode,
+  different fix
+- The approval harness doesn't replace the gate, it adds a second, independent question in
+  front of it: is this plan safe, versus did a specific human actually say yes to this specific
+  plan. The harness refused before approval existed, no matter how safe the plan looked
 
 ## Clean up
 
@@ -472,47 +485,41 @@ approve it with `harness/approve.sh`, and apply it. Does the mechanical gate fro
 still block it, even though a human already approved it? What does that tell you about which
 guardrail should run last?
 
-#### Summary
+## Validation
 
-The project is done: one small storage system, three independent guardrails built and proven
-against it. You watched an ungated delete destroy a real object with nothing stopping it, then
-watched the identical delete get refused once a hook sat between the plan and the apply. A skill
-can only ever suggest. A hook runs regardless. Then you built a second, independent guardrail on
-top of it: a real `--permission-mode plan` session proposes, a real file gets saved, a real
-approval step refuses to let anything through until a human says yes, and a second real session
-applies exactly what was approved, still through the same mechanical gate. Three mechanisms,
-three different answers to "how do you stop this": catch it by shape, remove the ability to do it
-unreviewed, or require an explicit human yes before a second session is even allowed to act. Take
-`hooks/blast_radius_gate.sh` and the `harness/` scripts with you, they're generic to any Terraform
-plan, not specific to this lab's buckets. M08 picks this up and generalizes it into a full
-harness, and M09 puts real cloud-shaped scanners in front of the same gate.
-
-##### Reading List
-
-- `reading/concepts.md` in this module: the voluntary-vs-enforced distinction, the
-  blast-radius-from-plan-json mechanism, and the three-guardrail comparison
-- `reading/concepts.md` in M01: no undo, state, blast radius, silent failure
-- `LAB.md` in M02: the real `--permission-mode plan` mechanic this lab's harness builds on
-- [Terraform: the `terraform show -json` plan representation](https://developer.hashicorp.com/terraform/internals/json-format)
-
-##### Search Keywords
-
-- hook, pre-apply gate, permission boundary
-- blast radius, terraform plan -json, terraform show -json
-- gate vs warning, exit code contract
-- plan-review-approve-apply, permission-mode plan, approval marker
-- GitOps as a guardrail, structural vs mechanical
-- floci, Tier 1 lab, apply, destroy
-
-##### Re-verify
-
-`lab/run.sh` runs the whole sequence for real: baseline apply, an ungated delete that destroys a
-real object, the same delete blocked by the gate, a safe change that passes, a high-radius type
-blocked, an oversized batch blocked, the full propose-approve-apply harness against a real Claude
-Code session, then reconcile and destroy, all against a real Floci container. Run it whenever the
-pinned Floci or Terraform versions in this lab get bumped:
+Run the whole sequence yourself, both guardrails, start to finish, against a real Floci
+container. This is what catches a regression if the pinned Floci or Terraform versions in this
+project ever get bumped:
 
 ```
 cd modules/module-06-guardrails/lab
 ./run.sh
 ```
+
+`run.sh` checks:
+
+- Baseline apply, then an ungated delete that destroys a real object
+- The same delete, blocked by the gate, plus a safe change that still passes, a high-radius
+  type blocked, and an oversized batch blocked
+- The full propose-approve-apply harness against a real Claude Code session
+- Reconcile and destroy, all against the real Floci container
+
+## Summary
+
+What you built:
+
+- A real delete that destroyed a real log file for good, with nothing in the way
+- `hooks/blast_radius_gate.sh`, a mechanical gate that reads a real Terraform plan and refuses
+  a real delete, a batch over size, or a high-radius resource type
+- The identical delete, run again, refused by that gate
+- A permission-boundary config that denies an agent's write tools on a path before a plan
+  exists
+- `harness/{propose,approve,apply_with_approval}.sh`, a real plan-review-approve-apply
+  harness: a session proposes, a file gets saved, an approval step blocks apply until a human
+  says yes, and a second session applies exactly what was approved, still through the
+  mechanical gate
+
+A skill can only ever suggest. A hook runs regardless. Take `hooks/blast_radius_gate.sh` and the
+`harness/` scripts with you, they're generic to any Terraform plan, not specific to this
+project's buckets. M08 picks this up and generalizes it into a full harness, and M09 puts real
+cloud scanners in front of the same gate.
