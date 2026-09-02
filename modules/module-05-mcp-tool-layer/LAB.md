@@ -1,19 +1,26 @@
-# Lab 5: Look Up the Real Thing, Build the Real Module
+# Project 05: Build an RDS Module Using the Terraform MCP Server
 
 **Tier 1** · ~40 min · Docker required. Real `terraform apply` against Floci, no cloud
-account. A later part opens a real, throwaway pull request on your own repository.
+account. A later stage opens a real, throwaway pull request on your own repository.
 
-**The project:** a real RDS database, tuned with a non-default parameter group, the kind of
-resource whose exact argument shape you'd normally have to look up by hand. You'll build it
-using a live connection to real systems, not a memorized guess. Module 4 gave your agent a
-skill it reaches for on its own. This lab gives it something different: MCP, a live tool
-connection. You'll ask the same question twice, once without that connection and once with
-it, then use the connection to build the database for real, applied and destroyed against
-Floci. Along the way you'll also try a second, AWS-specific MCP server, and find out live
-that "official" and "works today" are not the same claim, a real lesson, not a hypothetical
-one. Last, you'll watch the agent open a real pull request through a third MCP server,
-proving the same human-approval boundary from module 1 holds even when the agent is talking
-to a live API, not just a diagram.
+In this project, you will build a real RDS database, tuned with a non-default parameter
+group, the kind of resource whose exact arguments you would normally have to look up by
+hand. You will connect the official Terraform MCP server, ask the same real question with
+and without it, then use it to build and verify the database against Floci. Along the way
+you will try a second, AWS-specific MCP server, and a third one to open a real pull request,
+watching a human decision hold even when the agent is talking to a live API instead of a
+diagram.
+
+**What you're building, at a glance:**
+
+- The same real question, asked twice: once from memory, once through the Terraform MCP
+  server, then diffed
+- A real RDS instance with a non-default parameter group (`slow_query_log`,
+  `long_query_time`), applied, verified, and destroyed against Floci
+- A second AWS-specific MCP server, tried live, found broken on startup, a real lesson that
+  "official" and "ready" are not the same claim
+- A third MCP server, connected to GitHub, used to open a real pull request
+- A real PR, opened then closed without merging, the human decision still in place
 
 ## Pre Requisites
 
@@ -21,11 +28,11 @@ to a live API, not just a diagram.
 - The GitHub CLI, authenticated: `gh auth status`
 - A repository you're willing to push a throwaway branch to and open a real PR against. Use
   your own fork of the course labs repo, or any repo you own
-- Floci running for the RDS build later in this lab: `docker compose -f
+- Floci running for the RDS build later in this project: `docker compose -f
   ../../../labs/shared/docker-compose.floci.yml up -d`, then confirm with `curl
   http://localhost:4566/_floci/health`
 
-## Stage 1: connect the tool the project needs first
+## Stage 1: Connect the tool this project needs first
 
 HashiCorp ships the official Terraform MCP server as a Docker image, not an npm package.
 **Pull** it first:
@@ -48,7 +55,7 @@ claude mcp add --transport stdio terraform -- docker run --rm -i hashicorp/terra
 
 `file: lab/mcp-config/terraform.mcp.json` has the same config as a plain JSON file, in
 case your setup reads config from a file instead of the CLI. `[...]` see that file for the
-exact shape.
+exact contents.
 
 **Verify** the connection:
 
@@ -66,7 +73,7 @@ terraform:
   Args: run --rm -i hashicorp/terraform-mcp-server:latest stdio
 ```
 
-## Stage 2: prove you actually need it
+## Stage 2: Prove you actually need it
 
 Here's the one-line intent: "What's the latest version of the kreuzwerker/docker Terraform
 provider, and what arguments does its `healthcheck` block accept?"
@@ -77,9 +84,9 @@ provider, and what arguments does its `healthcheck` block accept?"
 claude -p --strict-mcp-config "Without searching the web or using any tools, from what you already know: what is the exact latest version number of the kreuzwerker/docker Terraform provider, and what is the full list of top-level arguments the docker_container resource's healthcheck block accepts? Answer from memory only, give your best specific answer even if you're not fully sure."
 ```
 
-`file: lab/evidence/stale-answer.txt` has the real captured answer from building this lab.
-Your own run will differ in wording, but watch for the same shape: a guess, low confidence,
-maybe a version number that's several minors behind.
+`file: lab/evidence/stale-answer.txt` has the real captured answer from building this
+project. Your own run will differ in wording, but watch for the same pattern: a guess, low
+confidence, maybe a version number that's several minors behind.
 
 **Ask** the identical question again, this time letting the agent actually use the tool:
 
@@ -90,13 +97,14 @@ claude -p "Using the terraform MCP tools available to you, look up the exact lat
 `file: lab/evidence/mcp-answer.txt` has the real captured answer, including which MCP tool
 the agent actually called. Diff the two. The gap between them is the whole lesson.
 
-## Stage 3: build the project, RDS with a non-default parameter group
+## Stage 3: Build the RDS module with a non-default parameter group
 
-A stale-vs-live lookup proves the point. Building something proves you can use it. `aws_db_parameter_group`
-is a good resource to learn this on: most learners have never written one by hand, so there's
-no memorized shape to fall back on, you actually need the live lookup.
+A stale-vs-live lookup proves the point. Building something proves you can use it.
+`aws_db_parameter_group` is a good resource to learn this on: most learners have never
+written one by hand, so there's no memorized answer to fall back on, you actually need the
+live lookup.
 
-**Ask** the agent to look up the resource shape, then check the answer against what it
+**Ask** the agent to look up the resource's arguments, then check the answer against what it
 actually returned:
 
 ```
@@ -104,12 +112,12 @@ claude -p "Using the terraform MCP tools available to you, look up the aws_db_pa
 ```
 
 `file: lab/evidence/param-group-mcp-answer.txt` has the real captured answer from building
-this lab. Read it closely; it's a good example of an honest tool response. The MCP server's
-docs give the required argument (`family`) as a literal fact from the provider schema, but
-they don't give a literal `mysql8.0` example, only `mysql5.6`/`mysql5.7`/`postgres13`. The
-agent inferred `mysql8.0` from the naming pattern and said so plainly, rather than
-presenting a guess as a citation. That's the difference between "the tool told me" and "I
-worked this out from what the tool told me," and a good agent keeps that distinction visible.
+this project. Read it closely, it's a good example of an honest tool response. The MCP
+server's docs give the required argument (`family`) as a literal fact from the provider
+schema, but they don't give a literal `mysql8.0` example, only `mysql5.6`/`mysql5.7`/
+`postgres13`. The agent inferred `mysql8.0` from the naming pattern and said so plainly,
+rather than presenting a guess as a citation. A good agent keeps that distinction visible:
+what the tool told it, versus what it worked out from what the tool told it.
 
 **Apply** the module. `file: lab/module/` has the full build: a minimal VPC (two private
 subnets, no internet gateway, this module doesn't need one), a security group scoped to the
@@ -146,15 +154,15 @@ print('parameter group name:            ', res['aws_db_parameter_group.app']['va
 ```
 
 Both lines should print the same name. If they don't, the parameter group exists but the
-instance never picked it up, a real, easy-to-miss mistake with this resource pair.
+instance never picked it up, an easy mistake to miss with this resource pair.
 
-**Destroy** it, this is a lab, not a running database:
+**Destroy** it, this is a project, not a running database:
 
 ```
 terraform destroy -auto-approve
 ```
 
-## Stage 4: a second tool for the same project, a real, live disappointment
+## Stage 4: Try a second MCP server, and watch it fail to start
 
 This course's own conventions name `aws-iac-mcp-server` as the modern, AWS-endorsed
 replacement for the deprecated `awslabs/terraform-mcp-server`. Try it:
@@ -164,23 +172,21 @@ uvx awslabs.aws-iac-mcp-server@latest --help
 ```
 
 `file: lab/evidence/aws-iac-mcp-server-attempt.txt` has the real captured output from
-building this lab. It installs, 86 real packages, a real dependency tree including
+building this project. It installs, 86 packages, a real dependency tree including
 `cfn-lint` and `botocore`, then crashes on startup with `ModuleNotFoundError: No module
 named 'fastmcp.server.proxy'`. Pinning an older `fastmcp` doesn't fix it, it just trades
-one crash for a different one, a real `pydantic` incompatibility.
+one crash for a different one, a `pydantic` incompatibility.
 
-Two things are true at once here, and both matter. First: `aws-iac-mcp-server` is real,
-it's the genuine AWS Labs package, and its documented tool list (`validate_cloudformation_template`,
-`check_cloudformation_template_compliance`, `search_cdk_documentation`, six more, all real,
-all CloudFormation/CDK-scoped) would be exactly what you want if part of your stack is CFN
-or CDK rather than Terraform. Second: as installed today, in a clean environment, it doesn't
-start. An MCP server being official doesn't mean it's stable, and an MCP server being
-AWS-specific doesn't mean it speaks your IaC tool, this one speaks CloudFormation and CDK,
-never Terraform HCL, even once it's running. Verify a server actually connects and actually
+Two things are true at once here. `aws-iac-mcp-server` is the genuine AWS Labs package, and
+its documented tool list (`validate_cloudformation_template`,
+`check_cloudformation_template_compliance`, `search_cdk_documentation`, six more) would be
+exactly what you want if part of your stack is CFN or CDK rather than Terraform. As
+installed today, in a clean environment, it doesn't start, and even once running, it speaks
+CloudFormation and CDK, never Terraform HCL. Verify a server actually connects and actually
 covers your tool before you plan a workflow around it, the same caution this course already
 gives Floci itself as a still-maturing project.
 
-## Stage 5: connect a third tool, to ship the project safely
+## Stage 5: Connect a third tool, to ship the project safely
 
 **Register** the official, hosted GitHub MCP server, using a `gh` token you already have:
 
@@ -191,15 +197,15 @@ claude mcp add --transport http github https://api.githubcopilot.com/mcp/ --head
 `file: lab/mcp-config/github.mcp.json` is the same config as a file, `$GITHUB_TOKEN`
 substituted from your environment instead of inline.
 
-## Stage 6: ship it, then hand the merge decision to a human
+## Stage 6: Ship it, then hand the merge decision to a human
 
 **Create** a throwaway branch with one small, harmless change:
 
 ```
 git checkout -b m05-mcp-lab-demo
-echo "opened by the M05 lab, safe to delete" >> mcp-lab-demo.md
+echo "opened by the M05 project, safe to delete" >> mcp-lab-demo.md
 git add mcp-lab-demo.md
-git commit -m "M05 lab: scratch file for the MCP PR-open step"
+git commit -m "M05 project: scratch file for the MCP PR-open stage"
 git push -u origin m05-mcp-lab-demo
 ```
 
@@ -210,7 +216,7 @@ claude -p "Using the github MCP tool available to you, open a real pull request 
 ```
 
 `file: lab/evidence/pr-opened.json` is the real API response captured from this exact
-sequence while building this lab: a real PR, `"state": "open"`, a real number and URL.
+sequence while building this project: a real PR, `"state": "open"`, a real number and URL.
 
 Read that response again. Nothing merged. The agent's own MCP call stopped at opening the
 PR. **Close** it without merging, the human decision:
@@ -230,42 +236,38 @@ tool's, whatever you'd actually reach for). Register it, ask it one real questio
 write two lines: what real answer came back, and would you have gotten that answer without
 it?
 
-## Summary
+## Validation
 
-The project is done: a real RDS database, tuned with a non-default parameter group, applied
-and verified and destroyed, built through a live tool connection instead of a memorized
-guess. Along the way, you asked the same question twice and watched a guess turn into a
-real, sourced answer. You tried a second AWS MCP server and watched it fail to start, a real
-reminder that "official" is not "ready." You watched an agent open a real pull request
-through a third MCP server, and watched a human, not the agent, decide whether it merged.
-MCP adds reach. Module 6 is where you build the gate that MCP servers themselves need to
-respect, the same permission-boundary caution already flagged in this chapter's reading.
-
-##### Reading List
-
-- [Model Context Protocol specification](https://modelcontextprotocol.io)
-- [HashiCorp Terraform MCP server](https://github.com/hashicorp/terraform-mcp-server)
-- [GitHub MCP server](https://github.com/github/github-mcp-server)
-- [AWS IaC MCP Server](https://awslabs.github.io/mcp/servers/aws-iac-mcp-server) (CloudFormation/CDK-scoped, not Terraform)
-
-##### Search Keywords
-
-- Model Context Protocol, MCP server, MCP client
-- terraform-mcp-server, github-mcp-server, aws-iac-mcp-server
-- claude mcp add, mcp tool call
-- stale training data, live lookup
-- aws_db_parameter_group, aws_db_instance
-
-##### Re-verify
-
-`lab/run.sh` checks the Terraform MCP Docker image, the MCP config files, the captured
-evidence (a low-confidence guess, a real MCP tool citation, a real `aws_db_parameter_group`
-lookup, the real aws-iac-mcp-server crash, a PR that opened then closed without merging),
-**and does a real `terraform apply` and `terraform destroy` of the RDS-with-parameter-group
-module against Floci**, start Floci first.
+Run the full check yourself, all three MCP servers and the real RDS build, against a real
+Floci container:
 
 ```
 docker compose -f labs/shared/docker-compose.floci.yml up -d
 cd modules/module-05-mcp-tool-layer/lab
 ./run.sh
 ```
+
+`run.sh` checks:
+
+- The Terraform MCP Docker image and the MCP config files
+- The captured evidence: a low-confidence memory guess, a real MCP tool citation, a real
+  `aws_db_parameter_group` lookup, the real `aws-iac-mcp-server` crash, a PR that opened then
+  closed without merging
+- A real `terraform apply` and `terraform destroy` of the RDS-with-parameter-group module
+  against Floci
+
+## Summary
+
+What you built:
+
+- Asked the same real question twice, once from memory, once through the Terraform MCP
+  server, and watched a guess turn into a sourced answer
+- Applied, verified, and destroyed a real RDS instance with a non-default parameter group
+  against Floci
+- Tried a second AWS MCP server live and watched it fail to start, official did not mean
+  ready
+- Connected a third MCP server and watched an agent open a real pull request through it
+- Watched a human, not the agent, decide whether that PR merged
+
+MCP adds reach. Module 6 is where you build the gate that MCP servers themselves need to
+respect, the same permission-boundary caution already flagged in this chapter's reading.
