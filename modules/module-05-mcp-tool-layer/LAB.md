@@ -17,6 +17,8 @@ diagram.
   server, then diffed
 - A real RDS instance with a non-default parameter group (`slow_query_log`,
   `long_query_time`), applied, verified, and destroyed against Floci
+- A seeded encryption gap on that same instance, caught for real by Checkov's `CKV_AWS_16`,
+  then fixed
 - A second AWS-specific MCP server, tried live, found broken on startup, a real lesson that
   "official" and "ready" are not the same claim
 - A third MCP server, connected to GitHub, used to open a real pull request
@@ -161,6 +163,71 @@ print('parameter group name:            ', res['aws_db_parameter_group.app']['va
 Both lines should print the same name. If they don't, the parameter group exists but the
 instance never picked it up, an easy mistake to miss with this resource pair.
 
+### Step 1: Catch a Real Encryption Gap
+
+Wiring the parameter group correctly is not the only thing worth checking before you'd ship
+this module. Module 1 used Checkov to catch a hardcoded secret. This module has zero Checkov
+usage anywhere so far, and `aws_db_instance` gives you a different kind of misconfiguration
+to catch, one attribute controlling whether the database is encrypted at rest.
+
+**Copy** the module into a scratch directory and seed the same mistake a rushed edit makes,
+turn storage encryption off:
+
+```
+cp -r lab/module ~/m05-scratch
+cd ~/m05-scratch
+```
+
+`edit file: ~/m05-scratch/db.tf`
+```
+  storage_encrypted       = false
+```
+
+**Scan** it:
+
+```
+checkov -d . --framework terraform --check CKV_AWS_16 --compact --quiet
+```
+
+`[ Expected output ]`
+```
+terraform scan results:
+
+Passed checks: 0, Failed checks: 1, Skipped checks: 0
+
+Check: CKV_AWS_16: "Ensure all data stored in the RDS is securely encrypted at rest"
+	FAILED for resource: aws_db_instance.app
+	File: /db.tf:23-37
+```
+
+`Exit code 1`. `CKV_AWS_16` reads the HCL directly. It fires the same way whether or not
+Floci is even running, a static check against the source, not the live resource. A learner
+who applied this module without scanning it first would only find storage encryption off by
+reading the database's settings after the fact.
+
+**Fix** it, put the attribute back:
+
+`edit file: ~/m05-scratch/db.tf`
+```
+  storage_encrypted       = true
+```
+
+**Scan** again:
+
+```
+checkov -d . --framework terraform --check CKV_AWS_16 --compact --quiet
+```
+
+`[ Expected output ]`
+```
+terraform scan results:
+
+Passed checks: 1, Failed checks: 0, Skipped checks: 0
+```
+
+`Exit code 0`. `lab/module/db.tf` already ships with `storage_encrypted = true`, that one
+attribute is why the apply above passed the same check and the destroy below is clean.
+
 **Destroy** it, this is a project, not a running database:
 
 ```
@@ -258,6 +325,8 @@ cd modules/module-05-mcp-tool-layer/lab
 - The captured evidence: a low-confidence memory guess, a real MCP tool citation, a real
   `aws_db_parameter_group` lookup, the real `aws-iac-mcp-server` crash, a PR that opened then
   closed without merging
+- A seeded `storage_encrypted = false` failing Checkov's `CKV_AWS_16`, and the fixed module
+  passing the same check
 - A real `terraform apply` and `terraform destroy` of the RDS-with-parameter-group module
   against Floci
 
@@ -269,6 +338,8 @@ What you built:
   server, and watched a guess turn into a sourced answer
 - Applied, verified, and destroyed a real RDS instance with a non-default parameter group
   against Floci
+- Seeded a real encryption gap on that instance, caught it with Checkov's `CKV_AWS_16`, and
+  fixed it
 - Tried a second AWS MCP server live and watched it fail to start, official did not mean
   ready
 - Connected a third MCP server and watched an agent open a real pull request through it

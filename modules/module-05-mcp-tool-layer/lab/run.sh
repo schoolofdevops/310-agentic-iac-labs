@@ -58,9 +58,25 @@ echo "==> evidence: aws-iac-mcp-server was really attempted, and honestly failed
 grep -q "ModuleNotFoundError\|TypeError" evidence/aws-iac-mcp-server-attempt.txt || fail "attempt evidence doesn't show a real crash"
 echo "    ok, this module doesn't paper over an immature dependency, it shows you the real failure"
 
+echo "==> checkov: a seeded storage_encrypted=false must fail CKV_AWS_16, the fixed module must pass"
+rm -rf /tmp/m05-checkov-scratch
+cp -r module /tmp/m05-checkov-scratch
+sed -i.bak 's/storage_encrypted       = true/storage_encrypted       = false/' /tmp/m05-checkov-scratch/db.tf
+grep -q "storage_encrypted       = false" /tmp/m05-checkov-scratch/db.tf || fail "seed did not take, db.tf still has storage_encrypted = true"
+checkov -d /tmp/m05-checkov-scratch --framework terraform --check CKV_AWS_16 --compact --quiet >/tmp/m05-checkov-seeded.log 2>&1
+CODE=$?
+[ "$CODE" -ne 0 ] || fail "seeded module unexpectedly passed checkov, CKV_AWS_16 should have caught storage_encrypted=false"
+grep -q "CKV_AWS_16" /tmp/m05-checkov-seeded.log || fail "expected CKV_AWS_16 finding, got: $(cat /tmp/m05-checkov-seeded.log)"
+echo "    ok, CKV_AWS_16 found as expected on the seeded module"
+
+checkov -d module --framework terraform --check CKV_AWS_16 --compact --quiet >/tmp/m05-checkov-fixed.log 2>&1 || fail "shipped module: checkov CKV_AWS_16: $(cat /tmp/m05-checkov-fixed.log)"
+grep -q "Passed checks: 1, Failed checks: 0" /tmp/m05-checkov-fixed.log || fail "shipped module did not pass CKV_AWS_16 cleanly: $(cat /tmp/m05-checkov-fixed.log)"
+echo "    ok, shipped module (storage_encrypted = true) passes CKV_AWS_16"
+rm -rf /tmp/m05-checkov-scratch
+
 echo "==> the RDS-with-parameter-group module: real Floci apply, real destroy"
 if ! curl -fsS http://localhost:4566/_floci/health >/dev/null 2>&1; then
-  fail "Floci isn't running on :4566 — start it first: docker compose -f ../../../labs/shared/docker-compose.floci.yml up -d"
+  fail "Floci isn't running on :4566, start it first: docker compose -f ../../../labs/shared/docker-compose.floci.yml up -d"
 fi
 cd module
 terraform init -input=false -upgrade=false >/tmp/m05-init.log 2>&1 || fail "terraform init: $(tail -20 /tmp/m05-init.log)"
@@ -88,4 +104,4 @@ echo "    ok, destroyed"
 cd ..
 
 echo
-echo "LAB PASSED — terraform MCP image real and responsive, config valid, captured evidence shows a real stale-vs-live gap, a real aws_db_parameter_group lookup, a real (and honestly failed) aws-iac-mcp-server attempt, an opened-then-closed PR, and a real applied-then-destroyed RDS-with-parameter-group module"
+echo "LAB PASSED: terraform MCP image real and responsive, config valid, captured evidence shows a real stale-vs-live gap, a real aws_db_parameter_group lookup, a real (and honestly failed) aws-iac-mcp-server attempt, an opened-then-closed PR, a seeded-then-fixed CKV_AWS_16 encryption gap, and a real applied-then-destroyed RDS-with-parameter-group module"
