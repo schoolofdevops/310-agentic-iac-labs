@@ -21,7 +21,7 @@ sidecar credential. Do not add unrelated resources here.
 
 ## Never do
 
-- Never put a secret in a `default`. Every credential-shaped variable is
+- Never put a secret in a `default`. Every variable that holds a credential is
   `sensitive = true`, with no default, set via `TF_VAR_<name>` at runtime.
 - Never run `terraform apply` before `terraform plan` has been read by a human.
 

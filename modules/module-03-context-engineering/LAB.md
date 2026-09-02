@@ -1,22 +1,29 @@
-# Lab 3: Give the Agent What a New Hire Would Get
+# Project 03: Manage Context for an Nginx Module Using AGENTS.md and STATE.md
 
 **Tier 0 → 1** · ~15 min · your own agent (Claude Code or Codex), the same
 `terraform` and `checkov` from M01.
 
-**The project:** a small, real Terraform module, one `docker` container running
-nginx, serving a static page you control, with a sidecar credential for
-shipping its access logs to S3. You will build this exact module three times
-in this lab, first to measure what a noisy scan actually costs you, then twice
-more to prove two separate claims about context engineering on the same code.
-By the end you will have a working module and three pieces of evidence, not
-just three exercises.
+In this project, you will build one small Terraform module three times: an
+nginx container serving a static page, with a sidecar credential for shipping
+its access logs to S3. Each build proves a different claim about context
+engineering: what a noisy scan actually costs you, what changes when you write
+standing context down, and what survives a session with zero memory.
 
-M01 had you run a generate-verify-fix loop by hand. This lab covers all three
-disciplines from `reading/concepts.md`: **Reduce**, filtering noisy tool output
-before it enters the window; **Retain**, standing facts that survive a session
-reset; **Route**, a plan written to disk so a session with zero memory can pick
-it up correctly. Each discipline gets its own stage below, building on the
-same module.
+**What you're building, at a glance:**
+
+- A real measurement of noisy versus filtered tool output on a 21-resource
+  module, an ~85% size cut with the same findings
+- The same nginx module, built twice from the same intent, once with no
+  `AGENTS.md`, once with one
+- A real hardcoded secret, caught by checkov, then fixed by writing the
+  missing convention down
+- A real `STATE.md` handed to a session with zero memory, verified to finish
+  the job correctly
+- A checkov-clean nginx module, plus three pieces of evidence for the three
+  disciplines in `reading/concepts.md`: **Reduce**, filtering noisy tool
+  output before it enters the window; **Retain**, standing facts that survive
+  a session reset; **Route**, a plan written to disk so a zero-memory session
+  can pick it up correctly
 
 ## Pre Requisites
 
@@ -25,7 +32,9 @@ same module.
 - An agent you can prompt directly, Claude Code or Codex, from a terminal in a
   scratch directory.
 
-## Stage 1, Reduce: measure it yourself
+## Stage 1: Measure what a noisy scan costs (Reduce)
+
+### Step 1: Measure verbose versus compact checkov output
 
 Before touching an agent at all, **measure** what a raw tool call actually
 costs versus a filtered one. This stage needs more real findings than the
@@ -52,29 +61,37 @@ reduction from one flag. **Read** `/tmp/verbose.txt` and count how many lines
 you'd actually act on versus how many you'd just scroll past. That gap is
 exactly what Reduce removes before it ever reaches an agent's context window.
 
-## Back to your own module: the intent
+## Stage 2: Prove standing context changes the outcome (Retain)
 
-Here is the module you are actually building, read the way an agent would:
+Now the standing-context discipline: build the real nginx module twice from
+the same intent, once with nothing written down, once with a real `AGENTS.md`
+in place, and read the difference for yourself. Here is the intent, read the
+way an agent would:
 
 > Give me a local nginx container for testing, serving a static page I control,
 > with its rendered HTML kept on disk so I can diff it in git. No secrets in the
 > container. I don't need it exposed outside this machine.
 
-## Stage 2, Retain: the AGENTS.md exercise
+### Step 1: Run once with no context
 
-Now the standing-context discipline: build this exact module twice from the
-same intent, once with nothing written down, once with a real `AGENTS.md` in
-place, and read the difference for yourself.
-
-### Run 1: no context
-
-**Copy** the no-context starter into a scratch directory and hand your own
-agent this exact intent, in a folder with nothing else in it:
+**Copy** the no-context starter into a scratch directory, with nothing else in
+it:
 
 ```
 cp -r modules/module-03-context-engineering/lab/starter ~/m03-run1
 cd ~/m03-run1
 ```
+
+**Open** Claude Code (or Codex) in that directory and give it the exact intent
+above:
+
+```
+claude -p "Give me a local nginx container for testing, serving a static page I control, with its rendered HTML kept on disk so I can diff it in git. No secrets in the container. I don't need it exposed outside this machine." \
+  --permission-mode acceptEdits --allowedTools "Read,Write,Edit"
+```
+
+This is what came back, captured for real, with no `AGENTS.md` anywhere in the
+folder:
 
 `file: ~/m03-run1/main.tf`
 ```
@@ -85,8 +102,7 @@ variable "log_shipper_key" {
 }
 ```
 
-This is what came back with no `AGENTS.md` anywhere in the folder, this
-module's captured, real run. **Scan** it:
+**Scan** it:
 
 ```
 terraform fmt -check
@@ -107,10 +123,10 @@ Check: CKV_SECRET_2: "AWS Access Key"
 Terraform. It's legal, it's readable, it just carries a convention nobody
 wrote down: secrets never get a `default`.
 
-### Write the context
+### Step 2: Write the context
 
 Now **write** the file that was missing. This is the actual deliverable of
-this lab, not a formality:
+this stage:
 
 `file: ~/m03-run1/AGENTS.md`
 ```
@@ -137,7 +153,7 @@ sidecar credential. Do not add unrelated resources here.
 
 ## Never do
 
-- Never put a secret in a `default`. Every credential-shaped variable is
+- Never put a secret in a `default`. Every variable that holds a credential is
   `sensitive = true`, with no default, set via `TF_VAR_<name>` at runtime.
 - Never run `terraform apply` before `terraform plan` has been read by a human.
 
@@ -149,16 +165,23 @@ hardcoded string, never a `.tfvars` file checked into git.
 
 Keep it short. A file nobody reads is worse than no file at all.
 
-### Run 2: with context
+### Step 3: Run again with context
 
-`cp` a fresh copy of the starter next to your new `AGENTS.md`, and hand your
-agent the **exact same intent** again, in a folder that now has that file in
-it:
+`cp` a fresh copy of the starter next to your new `AGENTS.md`, in a folder
+that now has that file in it:
 
 ```
 cp -r modules/module-03-context-engineering/lab/starter ~/m03-run2
 cp ~/m03-run1/AGENTS.md ~/m03-run2/AGENTS.md
 cd ~/m03-run2
+```
+
+**Open** Claude Code (or Codex) in `~/m03-run2` and give it the exact same
+intent as Step 1:
+
+```
+claude -p "Give me a local nginx container for testing, serving a static page I control, with its rendered HTML kept on disk so I can diff it in git. No secrets in the container. I don't need it exposed outside this machine." \
+  --permission-mode acceptEdits --allowedTools "Read,Write,Edit"
 ```
 
 This module's captured, real run 2 is `lab/solution/main.tf`, produced with
@@ -186,10 +209,9 @@ checkov -d .
 Exit code: 0
 ```
 
-Same intent. Same agent. Same repo, minus one file. That's the whole lesson of
-this lab in one diff.
+Same intent. Same agent. Same repo, minus one file.
 
-### Diff the two runs
+### Step 4: Diff the two runs
 
 **Compare** `lab/starter/main.tf` against `lab/solution/main.tf` yourself:
 
@@ -220,13 +242,15 @@ One variable block. That's the entire cost of writing `AGENTS.md` down once,
 against the entire cost of a scanner catching a real credential in source
 control after the fact. Notice which one you'd rather be doing every day.
 
-## Stage 3, Route: prove it yourself
+## Stage 3: Prove a plan survives a session reset (Route)
 
 Retain proved that standing facts survive a reset. This stage proves the
 harder claim on the same module: an in-progress plan can survive one too, as
 long as it never lived only in the conversation. The finding you are about to
 hand off is the exact one Retain's run 1 uncovered, the hardcoded secret, now
 picked up mid-fix by a session that never saw run 1 happen.
+
+### Step 1: Write a real state file
 
 **Write** a state file for an in-progress task, a real decision plus a real
 next action, not a vague TODO:
@@ -251,6 +275,8 @@ Edit main.tf: remove the default, add sensitive = true. Run checkov -d . and
 confirm exit 0.
 ```
 
+### Step 2: Hand it to a fresh session
+
 **Close that terminal, or open a brand new one.** The point only holds if the
 next command starts with genuinely zero memory of what you just did:
 
@@ -260,7 +286,9 @@ claude -p "Read STATE.md in this directory and do exactly what it says. Nothing 
   --allowedTools "Read,Write,Edit,Bash" --permission-mode acceptEdits
 ```
 
-**Verify** the fresh session actually did it, not just claimed to:
+### Step 3: Verify the fresh session actually did it
+
+**Verify** it, not just its claim:
 
 ```
 cat main.tf
@@ -298,7 +326,7 @@ difference, because it's the seam between this module and M06:
   needs a harness gate that makes the skip impossible, not a file that asks
   nicely. M06 builds that gate.
 
-#### Exercise
+## Exercise
 
 Delete one section from your own `AGENTS.md`, the naming convention or the
 provider pins, and run the exact same intent a third time. Does the mistake
@@ -309,49 +337,38 @@ lab exercise, a real piece of work. Write three lines in `notes.md`: which
 handing your real `STATE.md` to a fresh session, and which of the three
 disciplines, reduce, retain, route, you were worst at before this lab.
 
-#### Summary
+## Validation
 
-One small module, built three times, three pieces of evidence. Reduce: one
-flag cut a real scan's output by 85% without losing a single finding. Retain:
-the same intent, on the same module, twice, differed only by one file the
-agent read before it started. Route: a fresh session with zero memory picked
-up that same module mid-fix and finished it correctly, because the plan lived
-on disk, not in the conversation that had already been cleared. None of this
-was a cleverer prompt or a bigger model. It was managing a resource that
-resets, on purpose, in three specific ways, on one real piece of infrastructure
-you can point to. M06 picks up where Retain's second finding leaves off: the
-gate for mistakes that writing something down can't fully prevent.
-
-##### Reading List
-
-- [Anthropic: Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- `reading/concepts.md` in this module: the full Reduce/Retain/Route
-  breakdown, and the information-gap finding, 11 of 14 policy failures
-  resolved by making policy text visible
-- M01's `reading/concepts.md`: the three-layer diagnostic this lab's last
-  section applies
-- M12's `reading/concepts.md`: the real, measured number behind automated
-  context-compression tools, checked against their marketing claims
-
-##### Search Keywords
-
-- context engineering: reduce, retain, route
-- AGENTS.md, CLAUDE.md, standing context
-- checkov --compact, filtering tool output
-- STATE.md, fresh session, context reset
-- context window, context engineering vs prompt engineering
-- retrieval, repo shape
-- sensitive variable, TF_VAR_
-- three-layer diagnostic: context, harness, loop
-
-##### Re-verify
-
-`lab/run.sh` checks both runs for real: run 1 must fail checkov on
-`CKV_SECRET_2`, run 2 must be clean, and `AGENTS.md` must carry all four
-required sections. Run it whenever the pinned provider or checkov versions in
-this lab get bumped:
+Run the full check yourself, both runs, start to finish:
 
 ```
 cd modules/module-03-context-engineering/lab
 ./run.sh
 ```
+
+`run.sh` checks:
+
+- Run 1 fails checkov on `CKV_SECRET_2`, the hardcoded secret
+- Run 2 is clean, and `AGENTS.md` carries all four required sections
+
+Run it whenever the pinned provider or checkov versions in this project get
+bumped.
+
+## Summary
+
+What you built:
+
+- Measured a noisy scan's real cost: the same 25 findings, ~85% less output,
+  from one flag
+- Built the same nginx module twice from the same intent, once with no
+  `AGENTS.md`, once with one
+- Caught a real hardcoded secret with checkov, then fixed it by writing the
+  missing convention down, not by arguing with the agent
+- Wrote a real `STATE.md`, handed it to a session with zero memory, and
+  verified it finished the job correctly
+
+None of this was a cleverer prompt or a bigger model. It was managing a
+resource that resets, on purpose, in three specific ways, on one real piece of
+infrastructure you can point to. M06 picks up where Retain's second finding
+leaves off: the gate for mistakes that writing something down can't fully
+prevent.
