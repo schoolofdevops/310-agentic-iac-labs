@@ -3,11 +3,14 @@
 **Tier 1** · ~20 min · Docker socket mounted, `floci/floci:1.7.0` pinned, provider stub copied from
 `labs/shared/floci-spike/provider.tf`, same rules as every Tier 1 lab in this course.
 
-M04 gave you a skill. M05 gave you a live MCP connection. M06 gave you a hook. Today you **assemble**
-them into one thing: a harness built on the superpowers pattern, three real disciplines, not one.
-You'll run all three for real: verification-before-claiming (a hook that blocks an unbacked
-claim), test-first (a real RED-GREEN cycle against a Terraform module), and root-cause debugging
-(a real bug, three real wrong fixes, then the real root cause).
+**The project:** a real verification harness for an S3 bucket module, one skill plus one hook that
+together stop an unbacked "checkov passes" claim from ever reaching you. M04 gave you a skill. M05
+gave you a live MCP connection. M06 gave you a hook. Today you **assemble** a skill and a hook into
+one working harness, then prove it against three real disciplines from the superpowers pattern:
+verification-before-claiming (the hook itself, blocking an unbacked claim), test-first (a real
+RED-GREEN cycle against a Terraform module), and root-cause debugging (a real bug, three real wrong
+fixes, then the real root cause). By the end you'll have a harness you built, watched block a real
+bad claim, and watched pass a real good one.
 
 ## Pre Requisites
 
@@ -350,13 +353,15 @@ block anything, it isn't a hook yet, it's a comment.
 
 #### Summary
 
-You ran all three superpowers disciplines for real, not as prose. Verification-before-claiming: an
-unbacked claim blocked, the same shape of claim passed once real evidence sat next to it.
-Test-first: a real check that failed for the right reason before the fix existed, and passed for
-the right reason after. Root-cause debugging: three real wrong fixes, each ruling out a layer, then
-a real root cause found by comparing against a known-working example, applied and destroyed against
-real Floci. This is what M12 needs to be true before it's safe to let an agent loop unattended: a
-broken harness looped just repeats its mistakes faster.
+You built one project this lab: a verification harness for the S3 bucket module, a skill that
+states the rule plus a hook that enforces it, backed by three superpowers disciplines run for real,
+not as prose. Verification-before-claiming: an unbacked claim blocked by your own hook, the same
+shape of claim passed once real evidence sat next to it. Test-first: a real check that failed for
+the right reason before the fix existed, and passed for the right reason after. Root-cause
+debugging: three real wrong fixes, each ruling out a layer, then a real root cause found by
+comparing against a known-working example, applied and destroyed against real Floci. This is what
+M12 needs to be true before it's safe to let an agent loop unattended: a broken harness looped just
+repeats its mistakes faster.
 
 ##### Reading List
 
