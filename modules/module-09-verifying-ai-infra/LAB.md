@@ -64,7 +64,7 @@ Add up Trivy's HIGH and CRITICAL failures across its three grouped reports: 4 + 
 Checkov's own summary line says **25** directly. Same numbers as the reading, reproduced on
 your own machine.
 
-## Step 2: Run both scanners on this project's own module
+## Step 2: Run Trivy and Checkov
 
 **Copy** the lab module into your own working directory, same pattern as every lab since M01:
 
@@ -103,7 +103,7 @@ for this resource type doesn't encode it. That's the coverage gap from the readi
 concrete: Checkov's own rule set is the strictly larger one here, and only running Trivy
 would have missed this finding entirely.
 
-## Step 3: Write the rule neither tool knows
+## Step 3: Write an OPA Policy
 
 Your org has one rule neither Trivy nor Checkov can ever check: every `aws_s3_bucket` must
 carry an `Owner` tag. **Write** it as a real OPA policy:
@@ -146,7 +146,7 @@ already does. **Fix**, re-plan, re-check:
 `Owner = "m09-lab"`. Point `conftest` at the solution's plan instead and it passes clean,
 `1 test, 1 passed, 0 warnings, 0 failures, 0 exceptions`.
 
-## Step 4: Wire the cost gate, honestly
+## Step 4: Wire Infracost
 
 Infracost's own CLI needs a one time, free device login the first time you use it, no card:
 

@@ -32,7 +32,7 @@ diagram.
   ../../../labs/shared/docker-compose.floci.yml up -d`, then confirm with `curl
   http://localhost:4566/_floci/health`
 
-## Stage 1: Connect the tool this project needs first
+## Stage 1: Connect the Terraform MCP Server
 
 HashiCorp ships the official Terraform MCP server as a Docker image, not an npm package.
 **Pull** it first:
@@ -162,7 +162,7 @@ instance never picked it up, an easy mistake to miss with this resource pair.
 terraform destroy -auto-approve
 ```
 
-## Stage 4: Try a second MCP server, and watch it fail to start
+## Stage 4: Try aws-iac-mcp-server
 
 This course's own conventions name `aws-iac-mcp-server` as the modern, AWS-endorsed
 replacement for the deprecated `awslabs/terraform-mcp-server`. Try it:
@@ -186,7 +186,7 @@ CloudFormation and CDK, never Terraform HCL. Verify a server actually connects a
 covers your tool before you plan a workflow around it, the same caution this course already
 gives Floci itself as a still-maturing project.
 
-## Stage 5: Connect a third tool, to ship the project safely
+## Stage 5: Connect the GitHub MCP Server
 
 **Register** the official, hosted GitHub MCP server, using a `gh` token you already have:
 

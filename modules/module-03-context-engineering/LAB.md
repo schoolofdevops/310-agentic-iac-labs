@@ -32,7 +32,7 @@ standing context down, and what survives a session with zero memory.
 - An agent you can prompt directly, Claude Code or Codex, from a terminal in a
   scratch directory.
 
-## Stage 1: Measure what a noisy scan costs (Reduce)
+## Stage 1: Reduce
 
 ### Step 1: Measure verbose versus compact checkov output
 
@@ -49,7 +49,7 @@ checkov -d . --framework terraform --compact --quiet > /tmp/compact.txt
 wc -c /tmp/verbose.txt /tmp/compact.txt
 ```
 
-`[ Expected output shape ]`
+`[ Approximate output ]`
 ```
    25605 /tmp/verbose.txt
     3881 /tmp/compact.txt
@@ -61,7 +61,7 @@ reduction from one flag. **Read** `/tmp/verbose.txt` and count how many lines
 you'd actually act on versus how many you'd just scroll past. That gap is
 exactly what Reduce removes before it ever reaches an agent's context window.
 
-## Stage 2: Prove standing context changes the outcome (Retain)
+## Stage 2: Retain
 
 Now the standing-context discipline: build the real nginx module twice from
 the same intent, once with nothing written down, once with a real `AGENTS.md`
@@ -242,7 +242,7 @@ One variable block. That's the entire cost of writing `AGENTS.md` down once,
 against the entire cost of a scanner catching a real credential in source
 control after the fact. Notice which one you'd rather be doing every day.
 
-## Stage 3: Prove a plan survives a session reset (Route)
+## Stage 3: Route
 
 Retain proved that standing facts survive a reset. This stage proves the
 harder claim on the same module: an in-progress plan can survive one too, as
@@ -295,7 +295,7 @@ cat main.tf
 checkov -d .
 ```
 
-`[ Expected output shape ]`
+`[ Approximate output ]`
 ```
 variable "log_shipper_key" {
   description = "... Set via TF_VAR_log_shipper_key, never a default."
