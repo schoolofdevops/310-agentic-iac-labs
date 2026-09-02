@@ -408,6 +408,79 @@ docker rm -f floci
 Destroy complete! Resources: 3 destroyed.
 ```
 
+## Step 6: Apply the Spec-Driven Module With OpenTofu
+
+Same HCL, different binary. This is what "one language, two runtimes" actually
+means: not a separate OpenTofu curriculum, one real proof that the module you just
+built and verified with Terraform applies identically with OpenTofu.
+
+**Confirm** the pinned version:
+
+```
+tofu version
+```
+
+`[ Expected output ]`
+```
+OpenTofu v1.12.2
+on darwin_arm64
+```
+
+**Apply** the exact same spec-driven module, no changes to the `.tf` files:
+
+```
+cd spec-driven
+tofu init -backend=false -input=false
+tofu apply -auto-approve
+```
+
+`[ Expected output ]`
+```
+OpenTofu used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+OpenTofu will perform the following actions:
+
+  # aws_autoscaling_group.checkout_web will be created
+  # aws_autoscaling_policy.checkout_web_cpu will be created
+  # aws_launch_template.checkout_web will be created
+
+Plan: 3 to add, 0 to change, 0 to destroy.
+aws_launch_template.checkout_web: Creating...
+aws_launch_template.checkout_web: Creation complete after 5s
+aws_autoscaling_group.checkout_web: Creating...
+aws_autoscaling_group.checkout_web: Creation complete after 1m12s
+aws_autoscaling_policy.checkout_web_cpu: Creating...
+aws_autoscaling_policy.checkout_web_cpu: Creation complete after 1s
+
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+```
+
+Same resource count as the `terraform apply` run in Step 5. **Destroy** it:
+
+```
+tofu destroy -auto-approve
+```
+
+`[ Expected output ]`
+```
+Plan: 0 to add, 0 to change, 3 to destroy.
+aws_autoscaling_policy.checkout_web_cpu: Destroying...
+aws_autoscaling_policy.checkout_web_cpu: Destruction complete after 0s
+aws_autoscaling_group.checkout_web: Destroying...
+aws_autoscaling_group.checkout_web: Destruction complete after 7s
+aws_launch_template.checkout_web: Destroying...
+aws_launch_template.checkout_web: Destruction complete after 0s
+
+Destroy complete! Resources: 3 destroyed.
+```
+
+Terraform is BUSL-licensed. OpenTofu is MPL-2.0, a fork maintained under the Linux
+Foundation. For a module with no provider-specific Terraform-only features, which
+this one is, the choice of runtime is a license and tooling decision, not a
+different infrastructure outcome. That's the whole lesson, proven, not asserted.
+
 #### Exercise
 
 Write your own spec for a real, underspecified ask from your own backlog: requirements,

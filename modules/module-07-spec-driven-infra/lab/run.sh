@@ -103,6 +103,16 @@ terraform -chdir=spec-driven destroy -auto-approve -input=false >/tmp/m07-destro
 grep -q "Destroy complete" /tmp/m07-destroy.log || fail "destroy didn't complete cleanly"
 echo "    ok, applied for real, values matched every success criterion, destroyed cleanly"
 
+rm -rf spec-driven/.terraform spec-driven/.terraform.lock.hcl spec-driven/terraform.tfstate*
+
+echo "==> Step 6: OpenTofu apply/destroy, same module"
+tofu -chdir=spec-driven init -backend=false -input=false -no-color >/dev/null || fail "spec-driven tofu init"
+tofu -chdir=spec-driven apply -auto-approve -input=false >/tmp/m07-tofu-apply.log 2>&1 || fail "tofu apply: $(tail -20 /tmp/m07-tofu-apply.log)"
+grep -q "3 added" /tmp/m07-tofu-apply.log || fail "tofu apply: expected the same 3 resources terraform applied"
+tofu -chdir=spec-driven destroy -auto-approve -input=false >/tmp/m07-tofu-destroy.log 2>&1 || fail "tofu destroy: $(tail -20 /tmp/m07-tofu-destroy.log)"
+grep -q "3 destroyed" /tmp/m07-tofu-destroy.log || fail "tofu destroy didn't complete cleanly"
+echo "    ok, OpenTofu applied and destroyed the identical HCL, same resource count as terraform"
+
 rm -rf spec-driven/.terraform spec-driven/.terraform.lock.hcl spec-driven/terraform.tfstate* \
        vibe-coded/.terraform vibe-coded/.terraform.lock.hcl vibe-coded/terraform.tfstate*
 docker rm -f m07-floci >/dev/null 2>&1
