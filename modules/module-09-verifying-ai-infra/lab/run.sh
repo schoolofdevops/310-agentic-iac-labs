@@ -65,8 +65,8 @@ rm -rf module/.terraform module/.terraform.lock.hcl module/terraform.tfstate* \
        solution/.terraform solution/.terraform.lock.hcl solution/terraform.tfstate*
 
 echo "==> Step 6: eval rubric"
-python3 eval/rubric.py eval/fixture-bad.tf && { echo "FAIL: rubric should have rejected fixture-bad.tf"; exit 1; }
-python3 eval/rubric.py eval/fixture-good.tf || { echo "FAIL: rubric should have accepted fixture-good.tf"; exit 1; }
+python3 eval/rubric.py eval/fixture-bad.tf && fail "rubric should have rejected fixture-bad.tf"
+python3 eval/rubric.py eval/fixture-good.tf || fail "rubric should have accepted fixture-good.tf"
 echo "eval rubric: PASS"
 
 echo
