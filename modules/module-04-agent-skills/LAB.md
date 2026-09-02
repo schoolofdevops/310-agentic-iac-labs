@@ -521,6 +521,17 @@ place under the description someone will read before deciding to trust it. A ski
 that looks reasonable on a skim can still carry an instruction the description never
 accounts for.
 
+#### Exercise: Stage 3
+
+Run the same audit against the two skills you wrote yourself earlier in this project:
+`.claude/skills/terraform-module-conventions/SKILL.md` (Stage 1) and
+`.claude/skills/vpc-environment-scaffold/SKILL.md` (Stage 2). Compare each
+`description` against every instruction in its body, the same way you just did for
+the planted skill. Both should pass, everything each skill's instructions does is
+covered by what its description promises. Write one line in `notes.md` confirming
+that, and one line on what would have to change in either skill's instructions for
+it to fail the same audit.
+
 ## Validation
 
 Run the full check yourself, all three stages, start to finish, against a real Floci

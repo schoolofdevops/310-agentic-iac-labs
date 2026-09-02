@@ -67,7 +67,7 @@ rm -rf module/.terraform module/.terraform.lock.hcl module/terraform.tfstate* \
 echo "==> Step 6: eval rubric"
 python3 eval/rubric.py eval/fixture-bad.tf && fail "rubric should have rejected fixture-bad.tf"
 python3 eval/rubric.py eval/fixture-good.tf || fail "rubric should have accepted fixture-good.tf"
-echo "eval rubric: PASS"
+echo "    ok, rubric rejects fixture-bad.tf and accepts fixture-good.tf"
 
 echo
 echo "LAB PASSED: opening demo reproduced (trivy 7 / checkov 25), starter fails both scanners"

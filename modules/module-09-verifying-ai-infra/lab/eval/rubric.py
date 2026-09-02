@@ -25,7 +25,10 @@ def find_bucket_blocks(text):
 
 
 def check(path):
-    text = open(path, encoding="utf-8").read()
+    try:
+        text = open(path, encoding="utf-8").read()
+    except FileNotFoundError:
+        return False, [f"file not found: {path}"]
     blocks = find_bucket_blocks(text)
     if not blocks:
         return False, ["no aws_s3_bucket resource found"]
@@ -37,12 +40,20 @@ def check(path):
     return (not violations), violations
 
 
-if __name__ == "__main__":
+def main():
+    if len(sys.argv) != 2:
+        print("usage: rubric.py <path-to-terraform-file>", file=sys.stderr)
+        return 2
+
     ok, violations = check(sys.argv[1])
     if ok:
         print(f"PASS: every bucket in {sys.argv[1]} carries {REQUIRED_TAGS}")
-        sys.exit(0)
+        return 0
     print(f"FAIL: {sys.argv[1]} does not meet the tagging rubric")
     for v in violations:
         print(" -", v)
-    sys.exit(1)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

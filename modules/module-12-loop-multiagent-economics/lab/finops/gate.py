@@ -11,7 +11,10 @@ ALLOWED_INSTANCE_TYPES = {"t3.micro", "t3.small", "t3.medium"}
 
 
 def check(plan_path):
-    plan = json.load(open(plan_path, encoding="utf-8"))
+    try:
+        plan = json.load(open(plan_path, encoding="utf-8"))
+    except FileNotFoundError:
+        return [f"file not found: {plan_path}"]
     resources = plan.get("planned_values", {}).get("root_module", {}).get("resources", [])
     violations = []
     if len(resources) > MAX_RESOURCES:
@@ -34,12 +37,20 @@ def check(plan_path):
     return violations
 
 
-if __name__ == "__main__":
+def main():
+    if len(sys.argv) != 2:
+        print("usage: gate.py <path-to-terraform-plan-json>", file=sys.stderr)
+        return 2
+
     violations = check(sys.argv[1])
     if violations:
         print("FINOPS GATE FAILED:")
         for v in violations:
             print(" -", v)
-        sys.exit(1)
+        return 1
     print(f"FinOps gate passed: {sys.argv[1]} within policy.")
-    sys.exit(0)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -132,7 +132,7 @@ echo
 echo "==> Stage 3: skill audit"
 grep -c "credentials\|id_rsa" .claude/skills/terraform-formatter-untrusted/SKILL.md > /tmp/m04-audit-count.txt
 [ "$(cat /tmp/m04-audit-count.txt)" = "0" ] || fail "terraform-formatter-untrusted/SKILL.md still grants credential access"
-echo "skill audit: PASS"
+echo "    ok, terraform-formatter-untrusted/SKILL.md grants no credential access"
 
 echo
 echo "LAB PASSED, Part I: starter fails the secrets scan, solution is clean, applies and destroys cleanly on floci ${FLOCI_VERSION}."

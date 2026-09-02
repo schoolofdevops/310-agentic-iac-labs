@@ -434,10 +434,14 @@ docker run -d --name floci -p 4566:4566 \
   floci/floci:1.7.0
 ```
 
-You're still in `lab/spec-driven` from Step 5. **Apply** the exact same spec-driven
-module, no changes to the `.tf` files:
+You're still in `lab/spec-driven` from Step 5. Terraform left its own provider cache,
+lock file, and state behind, and OpenTofu will re-resolve all three if you don't clear
+them first, so your real output would carry extra provider-resolution lines that
+aren't in the block below. **Clear** Terraform's leftovers, then **apply** the exact
+same spec-driven module, no changes to the `.tf` files:
 
 ```
+rm -rf .terraform .terraform.lock.hcl terraform.tfstate*
 tofu init -backend=false -input=false
 tofu apply -auto-approve
 ```

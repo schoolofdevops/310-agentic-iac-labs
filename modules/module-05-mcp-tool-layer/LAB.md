@@ -32,12 +32,12 @@ diagram.
   ../../../labs/shared/docker-compose.floci.yml up -d`, then confirm with `curl
   http://localhost:4566/_floci/health`
 
+## Stage 1: Connect the Terraform MCP Server
+
 Before connecting a real MCP server you didn't build, audit it the way M04 taught you:
 compare its stated purpose against every capability it actually grants your agent,
 whether or not the vendor calls it official. A server this course names explicitly and
 one you find yourself on a marketplace deserve the same read.
-
-## Stage 1: Connect the Terraform MCP Server
 
 HashiCorp ships the official Terraform MCP server as a Docker image, not an npm package.
 **Pull** it first:
