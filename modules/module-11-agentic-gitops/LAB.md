@@ -4,12 +4,27 @@
 Argo CD install reconciling a real `kind` cluster. Docker required, same as every earlier
 Tier 1/2 lab. Numbered teardown at the end.
 
-M10 stood up a real cluster and requested a namespaced resource by hand. This lab is not really
-about GitOps mechanics, those are the easy part. It's about what makes an agent's production
-change safe to ship without a human reading every line: an automated gate that catches the
-agent's own mistake, a second agent that fixes the real cause once it sees the gate's real
-output, and a human who reviews one outcome instead of a diff. GitOps is what applies the result
-afterward, unattended and correctly. It's the last link in the chain, not the whole subject.
+**The project:** a real, working delivery pipeline for one small infrastructure repo, one that
+lets an agent propose a production change and reach a real cluster without a human ever running
+`terraform apply` or `kubectl apply` by hand, and without a human reading every line the agent
+wrote either. You will build it in four stages, each a separate job, each doing one thing:
+
+1. Wire an automated gate onto GitHub pull requests, so it runs whether or not anyone is
+   watching.
+2. Let an agent propose a real change and open a real pull request, no human touching the diff
+   first.
+3. Watch that gate catch a real mistake in the agent's own commit, and send a second agent in to
+   fix the real cause.
+4. Merge the one outcome a human actually reviews, then hand the apply itself to a real GitOps
+   controller reconciling a real cluster, including correcting a manual tamper on its own.
+
+M10 stood up a cluster and requested a namespaced resource by hand. This lab is not really about
+GitOps mechanics, those are the easy part, they're stage 4 above. It's about what makes an
+agent's production change safe to ship without a human reading every line: an automated gate
+that catches the agent's own mistake, a second agent that fixes the real cause once it sees the
+gate's real output, and a human who reviews one outcome instead of a diff. GitOps is what
+applies the result afterward, unattended and correctly. It's the last link in the chain, not the
+whole subject.
 
 ## Pre Requisites
 
@@ -204,7 +219,8 @@ human read a passing pull request and clicked merge. That's the whole shape of s
 delivery to prod: an agent's mistake reached a pipeline before it reached a person, the pipeline
 caught it and said exactly why, a second agent session fixed the actual cause instead of the
 symptom, and the only judgment call left for a human was "is this diff, now that it's green, the
-right thing to ship."
+right thing to ship." Stages 1 through 3 of the project are done. What's left is stage 4, the
+part where the merged result actually reaches a running cluster.
 
 ## Stand up the cluster, install Argo CD
 
@@ -353,14 +369,15 @@ is what actually makes this step 5 rather than a still-manual step 4 with extra 
 
 #### Summary
 
-An agent proposed a real change and opened a real pull request. A pipeline, not a human, caught
-the agent's own hardcoded secret and said exactly why. A second agent fixed the real cause from
-that real failure, not a guess. A human reviewed one outcome, a pull request gone from red to
-green, and merged it, the only manual step in the whole chain. A real GitOps controller then
-reconciled a real cluster from that merge, unattended, including correcting a real manual tamper
-on its own. That's step 5, supervised autonomy, for real: you reviewed outcomes, propose and
-merge, not each gate, each fix, or each sync event in between. M12 is where this course asks what
-happens when the loop itself, not just one pipeline, runs across many agents at once.
+The project is done: a real delivery pipeline where an agent proposed a real change and opened a
+real pull request, a pipeline, not a human, caught the agent's own hardcoded secret and said
+exactly why, a second agent fixed the real cause from that real failure, not a guess, a human
+reviewed one outcome, a pull request gone from red to green, and merged it, the only manual step
+in the whole chain, and a real GitOps controller then reconciled a real cluster from that merge,
+unattended, including correcting a real manual tamper on its own. That's step 5, supervised
+autonomy, for real: you reviewed outcomes, propose and merge, not each gate, each fix, or each
+sync event in between. M12 is where this course asks what happens when the loop itself, not just
+one pipeline, runs across many agents at once.
 
 ##### Reading List
 
