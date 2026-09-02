@@ -7,12 +7,16 @@ M03 gave the agent standing context, information that's true every run. This lab
 standing capability instead: a skill it reaches for on its own when a task matches, not
 something you have to re-explain every time.
 
-Two parts, same idea, different depth. Part I writes a skill that's pure prose, house rules
-an agent applies to a single S3 bucket. Part II is the real point of this module: a skill
-that **bundles a real, deterministic script**, not just instructions, and uses it to scaffold
-and validate a genuinely multi-environment VPC. Prose-only skills tell an agent what to do.
-A skill with a bundled script gives it something to run, with an exit code that doesn't care
-how convincingly the agent reasoned.
+**The project in this lab:** a shared VPC module used identically across dev, staging, and
+prod, three environments that are genuinely different from each other, not a tfvars file
+with one number changed, plus a skill that scaffolds and mechanically checks it. You build
+this in two stages. Stage 1 writes a skill that's pure prose, house rules an agent applies to
+a single S3 bucket, proof the discoverability mechanism itself works before anything harder
+rides on it. Stage 2 is the real point of this module: a skill that **bundles a real,
+deterministic script**, not just instructions, and uses it to scaffold and validate the
+multi-environment VPC. Prose-only skills tell an agent what to do. A skill with a bundled
+script gives it something to run, with an exit code that doesn't care how convincingly the
+agent reasoned.
 
 ## Pre Requisites
 
@@ -23,7 +27,7 @@ how convincingly the agent reasoned.
 docker info
 ```
 
-## Part I: A skill that writes house rules
+## Stage 1: A skill that writes house rules
 
 ### Read the worked example first
 
@@ -232,23 +236,26 @@ Same seam M03 opened, one module later: not every fix in this lab came from the 
   fixes by being invoked once. They need a gate that runs on every module, whether or not an
   agent decides to reach for a skill. That's the harness, coming in M06 and M08
 
-#### Exercise: Part I
+#### Exercise: Stage 1
 
 Take the `description` field in your skill and make it vague on purpose, something like
 "Terraform best practices." Ask the same agent the same intent a third time. Does the skill
 still get used? Write two lines in `notes.md`: what changed, and why a specific trigger
 phrase matters more than a complete rule set nobody ever reaches.
 
-## Part II: A skill that ships code, multi-environment VPC
+## Stage 2: A skill that ships code, the actual VPC project
 
-Part I's skill was three paragraphs of prose. It worked, an agent read it and applied every
+Stage 1's skill was three paragraphs of prose. It worked, an agent read it and applied every
 rule, but nothing in it was mechanically checked. If the agent had misjudged one line, nothing
-would have caught it, the skill can only ever suggest. This part builds a skill with real
-teeth: a bundled, deterministic script the skill runs as part of its own job, not something the
-agent reasons its way through freehand.
+would have caught it, the skill can only ever suggest. This stage builds the project's real
+skill, with real teeth: a bundled, deterministic script the skill runs as part of its own job,
+not something the agent reasons its way through freehand.
 
-The system: a shared VPC module, and three environments, dev, staging, and prod, that are
-**materially different from each other**, not a tfvars file with one number changed.
+Here's what you're building: a shared VPC module, and three environments, dev, staging, and
+prod, that are **materially different from each other**, not a tfvars file with one number
+changed. This is the module every later environment in a real team's account would import
+from, so getting the shared shape right, and getting it checked mechanically, matters more
+than any one environment's numbers.
 
 `file: vpc/modules/vpc/variables.tf`
 ```
@@ -283,7 +290,7 @@ share `nat_strategy = "single"` and still differ in AZ count. Only prod pays for
 
 ### The skill that bundles a real script
 
-**Read** `.claude/skills/vpc-environment-scaffold/SKILL.md`. Same frontmatter shape as Part I's
+**Read** `.claude/skills/vpc-environment-scaffold/SKILL.md`. Same frontmatter shape as Stage 1's
 skill, but its instructions point at a real file:
 
 `file: .claude/skills/vpc-environment-scaffold/scripts/check_cidr_overlap.py`
@@ -302,7 +309,7 @@ def find_overlaps(cidrs):
 
 Plain `ipaddress` arithmetic, no model involved. The skill's instructions tell the agent to run
 this **before** touching any environment's `vpc_cidr`, not to eyeball the numbers and decide
-they look fine. That's the actual difference this part of the lab is teaching: Part I's skill
+they look fine. That's the actual difference this part of the lab is teaching: Stage 1's skill
 could only ever suggest a correct answer. This one hands the agent a program with an exit code.
 
 **Run** it against the three real environments as they stand:
@@ -409,12 +416,12 @@ API-shaped emulation, not a real network path.
   call, two ranges either overlap or they don't, so the skill doesn't just tell the agent to
   "check for overlaps", it hands it a script that decides.
 - Whether prod should be `per_az` and staging shouldn't is **not** something the script checks.
-  That's a design decision written into the skill's prose, the same kind of house rule Part I
+  That's a design decision written into the skill's prose, the same kind of house rule Stage 1
   taught, sitting right next to a rule the skill can mechanically enforce. A skill can carry
   both at once. Confusing "the script verified this" with "the agent decided this and I should
   double check" is the mistake to watch for once a skill starts bundling real code.
 
-#### Exercise: Part II
+#### Exercise: Stage 2
 
 Add a fourth environment, `qa`, 2 AZs, `nat_strategy = "single"`, CIDR `10.13.0.0/16`. Before
 running `terraform validate`, run the overlap checker against `vpc/envs` with your new
@@ -424,9 +431,12 @@ script caught that `terraform validate` never would have, and why.
 
 #### Summary
 
-Part I: a skill written in prose, watched an agent apply it without being told to on the second
-run, applied and destroyed a real module against Floci. Part II: a skill that bundles a real
-deterministic script, catches a real CIDR collision across three genuinely different
+What you built: a shared VPC module with three genuinely different environments, dev,
+staging, and prod, scaffolded and validated by a skill that carries its own deterministic
+checker instead of asking an agent to eyeball CIDR math. Stage 1 proved the mechanism, a
+skill written in prose, watched an agent apply it without being told to on the second run,
+applied and destroyed a real module against Floci. Stage 2 built the project's real skill,
+one that bundles a real deterministic script, catches a real CIDR collision across the three
 environments, and applies and destroys a twelve-resource VPC against Floci. The through-line:
 a skill's prose can only ever be followed or misjudged. A skill's bundled script either exits 0
 or it doesn't. Neither replaces the harness, M06 and M08's gates run whether or not an agent
@@ -436,7 +446,7 @@ chooses to reach for a skill at all, but a skill that ships code closes more of 
 ##### Reading List
 
 - `demos/m1-agent-preview/.claude/skills/container-conventions/SKILL.md`, the worked example
-  Part I's skill is modeled on
+  Stage 1's skill is modeled on
 - `reading/concepts.md` in this module: the context vs skill vs prompt distinction, and what a
   bundled script changes about that distinction
 - `labs/shared/floci-spike/provider.tf`: the canonical Tier 1 provider stub both parts reuse
@@ -453,9 +463,9 @@ chooses to reach for a skill at all, but a skill that ships code closes more of 
 
 ##### Re-verify
 
-`lab/run.sh` checks both parts for real. Part I: run 1 must fail the secrets scan, run 2 must
+`lab/run.sh` checks both parts for real. Stage 1: run 1 must fail the secrets scan, run 2 must
 be clean and carry the required tags and provider pin, then it applies and destroys the
-solution module against a real Floci container. Part II: all three VPC environments must
+solution module against a real Floci container. Stage 2: all three VPC environments must
 `validate` clean, the overlap checker must pass on the real environments and correctly catch a
 seeded collision in a scratch copy, then it applies and destroys the dev environment's twelve
 resources against a real Floci container. Run it whenever the pinned provider, checkov, or
