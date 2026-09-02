@@ -2,12 +2,16 @@
 
 **Tier 1** · ~30 min · Terraform, Checkov, and Floci, same setup as the last few labs.
 
+**The project:** a real autoscaling web tier for a checkout service, the kind of resource that
+handles a real traffic spike or fails badly in front of one. You are going to build it twice
+against the same one-line ticket, once with a written spec first and once by feel, apply the
+spec-driven version for real, and check both against the same real, applied infrastructure to see
+what the difference actually buys you.
+
 M01's lab gave you a one-line intent and a starter skeleton. That's fine for a first exercise.
 Real work rarely comes in one line, it comes as a ticket that says roughly what someone wants and
 leaves the rest for you to fill in. This lab gives you exactly that kind of ticket, on a module with
-real teeth: an autoscaling web tier, not a single bucket. You're going to answer it two different
-ways, once with a written spec, once by feel, then check both against the same real, applied
-infrastructure and see what the difference actually buys you.
+real teeth.
 
 ## Pre Requisites
 
@@ -399,7 +403,8 @@ this lab just did.
 
 #### Summary
 
-You wrote a real spec for an autoscaling tier with five genuine ambiguities, generated a module
+The project you built: one real autoscaling web tier, generated twice from the same one-line
+ticket. You wrote a real spec for an autoscaling tier with five genuine ambiguities, generated a module
 that traces every line back to a requirement, applied it for real and confirmed the running state
 matched every success criterion, then compared it against the same ticket answered by feel. The
 vibe-coded version wasn't broken, it was plausible, complete-looking, and quietly wrong on five real
