@@ -1,18 +1,23 @@
-# Lab 9: Run the Real Pipeline
+# Project 09: Build a Scan-and-Policy Pipeline for a Real S3 Module
 
 **Tier 1** · ~20 min · Docker socket mounted, `floci/floci:1.7.0` pinned, provider stub from
-`labs/shared/floci-spike/provider.tf`, same Tier 1 rules as every hands-on lab since M04.
+`labs/shared/floci-spike/provider.tf`, same Tier 1 rules as every hands-on project since M04.
 
-The project in this lab is a real S3 module for a reports-and-backups service, two
-buckets, `reports` and `backups`, one of them deliberately left unhardened. You are not
-writing new Terraform. You are building the pipeline that decides whether this project's
-Terraform is safe to apply, the same one you have carried as a sentence since module one:
-the agent proposes, the pipeline decides.
+In this project, you will build the pipeline that decides whether a real Terraform module is
+safe to apply, the same sentence you have carried since module one: the agent proposes, the
+pipeline decides. The module itself is already written: a reports-and-backups S3 service, two
+buckets, one deliberately left unhardened.
 
-You've read the numbers: identical code, Trivy 7 findings, Checkov 25. Now you run both
-scanners yourself against this module, write the one rule neither tool knows, wire a cost
-gate honestly, and assemble all of it into a single pipeline script that blocks on the
-first real failure, exactly the shape `pipeline.sh` in this lab folder already is.
+**What you're building, at a glance:**
+
+- Both scanners run yourself, against a real 21-resource module and against this project's own
+  module, reproducing the exact numbers from the reading
+- **A real Checkov finding Trivy never reports**, proof the two tools don't cover the same
+  ground
+- **A real OPA policy**, written from scratch, for a rule neither scanner can ever know
+- **A real cost gate**, wired honestly: it runs for real if you have an Infracost key, and
+  skips with a clear message if you don't, never a guessed number
+- **A five-stage pipeline script** that blocks on the first real failure, cheap checks first
 
 ## Pre Requisites
 
@@ -31,7 +36,7 @@ checkov --version
 conftest --version
 ```
 
-## Reproduce the opening demo, live
+## Step 1: Reproduce the opening demo, live
 
 Before touching this lab's own module, reproduce the number from the reading, on the real
 21-resource module already in this repo:
@@ -59,7 +64,7 @@ Add up Trivy's HIGH and CRITICAL failures across its three grouped reports: 4 + 
 Checkov's own summary line says **25** directly. Same numbers as the reading, reproduced on
 your own machine.
 
-## Run both scanners on this lab's own module
+## Step 2: Run both scanners on this project's own module
 
 **Copy** the lab module into your own working directory, same pattern as every lab since M01:
 
@@ -98,7 +103,7 @@ for this resource type doesn't encode it. That's the coverage gap from the readi
 concrete: Checkov's own rule set is the strictly larger one here, and only running Trivy
 would have missed this finding entirely.
 
-## Write the rule neither tool knows
+## Step 3: Write the rule neither tool knows
 
 Your org has one rule neither Trivy nor Checkov can ever check: every `aws_s3_bucket` must
 carry an `Owner` tag. **Write** it as a real OPA policy:
@@ -141,7 +146,7 @@ already does. **Fix**, re-plan, re-check:
 `Owner = "m09-lab"`. Point `conftest` at the solution's plan instead and it passes clean,
 `1 test, 1 passed, 0 warnings, 0 failures, 0 exceptions`.
 
-## The cost gate, honestly
+## Step 4: Wire the cost gate, honestly
 
 Infracost's own CLI needs a one time, free device login the first time you use it, no card:
 
@@ -154,7 +159,7 @@ stage on. This lab's own `pipeline.sh` checks for it and does the honest thing e
 runs the real estimate if you have a key, or skips the stage with a clear message if you
 don't, never a guessed number.
 
-## Assemble the pipeline
+## Step 5: Assemble the pipeline
 
 `file: lab/pipeline.sh` in this repo is the reference version, five stages, in the order
 the reading argued for: fmt/validate, trivy, checkov, conftest, infracost, each one able to
@@ -209,30 +214,39 @@ worth remembering the next time a suppression silently doesn't work: verify it d
 #### Exercise
 
 Add a third bucket to `module/main.tf`, on purpose leave its `Owner` tag off, and run
-`conftest` again. Confirm it fails on the new bucket by name, not just "something failed."
-Then fix it and confirm a clean pass.
+`conftest` again. Confirm it fails on the new bucket by name. Then fix it and confirm a
+clean pass.
 
-#### Summary
+## Validation
 
-You built one project in this lab: a five stage pipeline that decides whether the
-reports-and-backups module is safe to apply, not just a module. Scan with two tools
-because one alone is a coverage gap, write the policy check for the rule only your team
-knows, treat cost as a gate instead of a report, and assemble all of it in
-cheap-to-expensive order, exactly the thesis module one opened with, now real. M10 and M11
-put this same pipeline in front of a real CI system. The capstone puts it in front of
-everything you build there.
+Run the full pipeline yourself, both the starter module and the solution, against a real
+Floci container:
 
-##### Reading List
+```
+cd modules/module-09-verifying-ai-infra/lab
+./run.sh
+```
 
-- [Trivy: Terraform misconfiguration scanning](https://trivy.dev)
-- [Checkov: policy index](https://www.checkov.io/5.Policy%20Index/terraform.html)
-- [Open Policy Agent: policy language](https://www.openpolicyagent.org/docs/latest/policy-language/)
-- [Conftest documentation](https://www.conftest.dev/)
-- [Infracost: getting started](https://www.infracost.io/docs/)
+`run.sh` checks:
 
-##### Search Keywords
+- The opening demo reproduces on the real `floci-spike` module: Trivy 7, Checkov 25
+- Both scanners run against this project's own module and agree the starter is unhardened
+- The OPA policy fails on the starter module and passes on the solution
+- `pipeline.sh` blocks at stage 2 on the starter module and passes all five stages on the
+  solution
 
-- trivy config, checkov, --skip-check, --skip-download
-- conftest, opa, rego, resource_changes
-- infracost breakdown, infracost auth login
-- cost gate, policy as code, plan-diff review
+## Summary
+
+What you built:
+
+- Both scanners reproduced against a real module, same numbers as the reading
+- A real Checkov finding Trivy never reported, the coverage gap made concrete
+- A real OPA policy for the one rule neither scanner can check
+- A cost gate wired to skip honestly, never to guess
+- A five-stage pipeline that blocks on the first real failure, cheap checks first
+
+Scan with two tools because one alone is a coverage gap. Write the policy check for the rule
+only your team knows. Treat cost as a gate, not a report. Assemble all of it in
+cheap-to-expensive order, the thesis this course opened with, now real. M10 and M11 put this
+same pipeline in front of a real CI system. The capstone puts it in front of everything you
+build there.
