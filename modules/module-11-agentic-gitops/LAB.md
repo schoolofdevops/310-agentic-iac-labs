@@ -1,30 +1,30 @@
-# Lab 11: An Agent Proposes, a Pipeline Reviews, You Merge, GitOps Delivers
+# Project 11: Ship an Agent's Change to Production Using a Pipeline and GitOps
 
 **Tier 2** · ~25 min · a real GitHub Actions workflow, a real agent-opened pull request, a real
 Argo CD install reconciling a real `kind` cluster. Docker required, same as every earlier
 Tier 1/2 lab. Numbered teardown at the end.
 
-**The project:** a real, working delivery pipeline for one small infrastructure repo, one that
-lets an agent propose a production change and reach a real cluster without a human ever running
-`terraform apply` or `kubectl apply` by hand, and without a human reading every line the agent
-wrote either. You will build it in four stages, each a separate job, each doing one thing:
+In this project, you will wire an automated CI gate onto a real GitHub repo, let an agent open a
+real pull request on its own, watch the gate catch a real mistake in that agent's commit, send a
+second agent in to fix the real cause, merge the result, then let a real GitOps controller apply
+it to a `kind` cluster, unattended.
 
-1. Wire an automated gate onto GitHub pull requests, so it runs whether or not anyone is
-   watching.
-2. Let an agent propose a real change and open a real pull request, no human touching the diff
-   first.
-3. Watch that gate catch a real mistake in the agent's own commit, and send a second agent in to
-   fix the real cause.
-4. Merge the one outcome a human actually reviews, then hand the apply itself to a real GitOps
-   controller reconciling a real cluster, including correcting a manual tamper on its own.
+**What you're building, at a glance:**
 
-M10 stood up a cluster and requested a namespaced resource by hand. This lab is not really about
-GitOps mechanics, those are the easy part, they're stage 4 above. It's about what makes an
-agent's production change safe to ship without a human reading every line: an automated gate
-that catches the agent's own mistake, a second agent that fixes the real cause once it sees the
-gate's real output, and a human who reviews one outcome instead of a diff. GitOps is what
-applies the result afterward, unattended and correctly. It's the last link in the chain, not the
-whole subject.
+- An automated CI gate on GitHub pull requests: fmt, validate, Trivy, Checkov
+- A real pull request, opened by an agent, no human touching the diff first
+- A real CI failure, caught by the gate, on the agent's own hardcoded secret
+- A second agent fixing the real cause, from the CI output alone
+- A merge, the one manual step in the whole chain
+- A real Argo CD install reconciling a real cluster, including self-healing a manual tamper
+
+GitOps mechanics, stage 4 below, are the easy part of this project, not the point. The point is
+what makes an agent's production change safe to ship without a human reading every line: an
+automated gate that catches the agent's own mistake, a second agent that fixes the cause once it
+sees the gate's output, and a human who reviews one outcome instead of a diff. GitOps applies the
+result afterward, unattended and correctly. It's the last link in the chain, not the whole
+subject. M10 stood up a cluster and requested a namespaced resource by hand, this project is
+where that same cluster starts receiving changes an agent proposed.
 
 ## Pre Requisites
 
@@ -47,7 +47,7 @@ If `docker info` hangs or errors, stop and fix Docker first, same as every earli
 > pull request merges, a real controller should reconcile a real cluster to match, with nobody
 > running `kubectl apply`.
 
-## Add the CI workflow
+## Stage 1: Wire the automated gate onto pull requests
 
 `file: .github/workflows/m11-pipeline-demo.yml`
 ```
@@ -93,7 +93,7 @@ jobs:
 The `paths:` filter matters. Without it, every pull request in the repo would trigger this
 workflow, including ones that never touch this module.
 
-This is the same fmt/validate/Trivy/Checkov shape as M09's `pipeline.sh`, minus the policy
+This is the same fmt/validate/Trivy/Checkov sequence as M09's `pipeline.sh`, minus the policy
 and cost stages, which need a `policy/` directory and an Infracost API key this toy module
 doesn't carry. Worth saying plainly: this module's `local_file` resources have nothing
 Trivy's cloud/container checks look for, so it runs clean here, 0 findings, every time. That
@@ -101,7 +101,9 @@ is not a wasted stage. It is the same command M09 ran against real AWS resources
 HIGH/CRITICAL findings, wired to run automatically now, on infrastructure that happens not to
 trip it. Checkov is what actually catches this lab's finding, next.
 
-## Let the agent propose the change, not you
+## Stage 2: Let an agent open the pull request
+
+### Step 1: Ask the agent to make the change and open a PR
 
 Every earlier lab in this course had you drive the agent through each step yourself. This one
 is different on purpose: the thing being tested is whether a *pipeline*, not a human proofreading
@@ -137,6 +139,8 @@ Read that note again. The agent noticed its own mistake on the way out and said 
 didn't stop itself from committing it anyway, because nothing in its instructions told it to.
 That's exactly the gap a gate closes and a polite disclaimer doesn't.
 
+### Step 2: Watch the gate catch the mistake
+
 **Watch** the real pull request's real CI run:
 
 ```
@@ -158,9 +162,11 @@ X CKV_SECRET_2: "AWS Access Key"
 
 Nobody ran `checkov` by hand, and nobody reviewed the agent's diff before it went out. A pull
 request did the reviewing, automatically, and it failed for a real reason: the same
-`CKV_SECRET_2` finding this course has used since Lab 1, this time on an agent's own commit.
+`CKV_SECRET_2` finding this course has used since Project 1, this time on an agent's own commit.
 
-## Send the failure back to the agent
+## Stage 3: Send the failure back to the agent
+
+### Step 1: Ask a second agent to fix the real cause
 
 **Ask** a second, separate agent session to fix it, using nothing but the real CI output as
 context:
@@ -181,6 +187,8 @@ Done. cb92c25 pushed. signing_key_id now no default, sensitive=true, desc says s
 TF_VAR_signing_key_id. webhook_token untouched. CKV_SECRET_2 should clear on next CI run.
 ```
 
+### Step 2: Watch the gate pass
+
 **Watch** the same PR's CI run again:
 
 ```
@@ -198,7 +206,9 @@ JOBS
   ✓ checkov
 ```
 
-## Merge
+## Stage 4: Merge and let GitOps apply it
+
+### Step 1: Merge
 
 This is the one manual step left in the whole loop, and notice what you're actually reviewing:
 not `terraform fmt`, not the trivy run, not the checkov run, not even the diff line by line.
@@ -215,14 +225,13 @@ gh pr merge 4 --squash --delete-branch
 ```
 
 Two agent sessions proposed and fixed this change. Zero human edits touched the Terraform. One
-human read a passing pull request and clicked merge. That's the whole shape of safe agentic
-delivery to prod: an agent's mistake reached a pipeline before it reached a person, the pipeline
-caught it and said exactly why, a second agent session fixed the actual cause instead of the
-symptom, and the only judgment call left for a human was "is this diff, now that it's green, the
-right thing to ship." Stages 1 through 3 of the project are done. What's left is stage 4, the
-part where the merged result actually reaches a running cluster.
+human read a passing pull request and clicked merge. An agent's mistake reached a pipeline
+before it reached a person, the pipeline caught it and said exactly why, a second agent session
+fixed the actual cause instead of the symptom, and the only judgment call left for a human was
+"is this diff, now that it's green, the right thing to ship." Stages 1 through 3 are done. What's
+left is stage 4, the part where the merged result actually reaches a running cluster.
 
-## Stand up the cluster, install Argo CD
+### Step 2: Stand up the cluster and install Argo CD
 
 `file: lab/starter/kind-config.yaml`
 ```
@@ -253,7 +262,7 @@ still have another kind cluster around, creating this one can silently leave `ku
 at the wrong cluster. Pinning the context makes every command below correct regardless of what
 else is running on your machine.
 
-## Point Argo CD at the real, merged repo
+### Step 3: Point Argo CD at the real, merged repo
 
 `file: lab/solution/argocd-app.yaml`
 ```
@@ -308,7 +317,7 @@ kubectl --context kind-m11-lab get configmap m11-gitops-demo -n default -o jsonp
 reconciled by GitOps, not kubectl apply
 ```
 
-## See self-heal for real
+### Step 4: Watch self-heal for real
 
 **Tamper** with the resource directly, the way someone might by accident:
 
@@ -367,30 +376,40 @@ Point Argo CD's `syncPolicy` at manual instead of automated (`syncPolicy: {}` wi
 until you run `argocd app sync` yourself. Explain, in your own words, why `automated.selfHeal`
 is what actually makes this step 5 rather than a still-manual step 4 with extra steps.
 
-#### Summary
+## Validation
 
-The project is done: a real delivery pipeline where an agent proposed a real change and opened a
-real pull request, a pipeline, not a human, caught the agent's own hardcoded secret and said
-exactly why, a second agent fixed the real cause from that real failure, not a guess, a human
-reviewed one outcome, a pull request gone from red to green, and merged it, the only manual step
-in the whole chain, and a real GitOps controller then reconciled a real cluster from that merge,
-unattended, including correcting a real manual tamper on its own. That's step 5, supervised
-autonomy, for real: you reviewed outcomes, propose and merge, not each gate, each fix, or each
-sync event in between. M12 is where this course asks what happens when the loop itself, not just
-one pipeline, runs across many agents at once.
+Run the full check yourself, all four stages, start to finish, against a real `kind` cluster.
+This is what catches a regression if the pinned Argo CD manifest, `kind` node image, or the CI
+workflow's action versions ever change:
 
-##### Reading List
+```
+cd modules/module-11-agentic-gitops/lab
+./run.sh
+```
 
-- [Argo CD: core concepts](https://argo-cd.readthedocs.io/en/stable/core_concepts/)
-- [GitHub Actions: workflow syntax](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
-- `reading/concepts.md` in this module: why propose, review, merge, and apply are four separate
-  jobs, and exactly what step 5 does and doesn't mean
+`run.sh` checks:
 
-##### Search Keywords
+- The merged fix is real: `pipeline-demo/main.tf` carries both `sensitive = true` variables, no
+  hardcoded default remains, and the agent-proposed `signing_key_id` variable is present
+- A real `kind` cluster comes up, node image pinned by digest
+- Argo CD installs clean, from the real upstream manifest
+- Argo CD points at the real, merged repo and reconciles it
+- A direct tamper on the resource gets corrected on its own, self-heal, for real
+- Teardown removes the application and deletes the cluster, no orphan containers left behind
 
-- agent-proposed pull request, propose then review then merge then apply
-- github actions, pull_request paths filter
-- trivy config scan, checkov-action, CKV_SECRET_2
-- argocd, Application, syncPolicy, automated, selfHeal
-- kind, server-side apply, force-conflicts
-- gitops, reconcile, drift correction
+## Summary
+
+What you built:
+
+- An automated CI gate on GitHub pull requests: fmt, validate, Trivy, Checkov, running whether
+  or not anyone is watching
+- A real pull request, opened by an agent, no human touching the diff first
+- A real CI failure, caught by the gate, on the agent's own hardcoded secret
+- A second agent fixing the real cause, from the CI output alone, not a guess
+- A merge, the only manual step in the whole chain, reviewing one outcome instead of a diff
+- A real Argo CD install reconciling a real cluster from that merge, unattended, including
+  correcting a real manual tamper on its own
+
+This is step 5 on the autonomy ladder, supervised autonomy, for real: you reviewed outcomes,
+propose and merge, not each gate, each fix, or each sync event in between. M12 asks what happens
+when the loop itself, not just one pipeline, runs across many agents at once.
