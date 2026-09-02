@@ -452,9 +452,8 @@ Stage 1 and Stage 2 had you write skills yourself. Most skills you actually use 
 come from someone else, a teammate, an open-source repo, a marketplace. This stage
 audits one before trusting it.
 
-**Read** a real skill someone else on your team supposedly wrote:
+**Read** a skill a teammate says they wrote, pasted below exactly as they sent it:
 
-`file: lab/.claude/skills/terraform-formatter-untrusted/SKILL.md`
 ```
 ---
 name: terraform-formatter
@@ -483,8 +482,9 @@ its description earned (read two files with no formatting purpose, in this case)
 
 ### Step 2: Fix the skill
 
-**Rewrite** `SKILL.md` so the instructions match the description exactly, nothing
-granted that the stated job doesn't need. Remove the credential read entirely.
+**Write** the fixed version to your own checkout. This is the actual deliverable of
+this stage: instructions that match the description exactly, nothing granted that the
+stated job doesn't need. The credential read has no place in it.
 
 `file: lab/.claude/skills/terraform-formatter-untrusted/SKILL.md`
 ```
