@@ -3,6 +3,11 @@
 **Tier 1** · ~40 min · Docker socket mounted, `floci/floci:1.7.0` pinned, real `terraform apply`
 and `destroy` against it, real Claude Code sessions in `--permission-mode plan`.
 
+**The project:** a small, real storage system, two S3 buckets, one of them holding a genuine log
+file, that an agent could delete for good with a single misread instruction. You build three
+independent guardrails around that one system and test all three against the exact same real
+delete, so you can see, on the same object, what each one costs and what each one actually stops.
+
 M04 gave the agent a skill it could choose to reach for. That's still voluntary. This lab builds
 three things that don't depend on the agent deciding anything: a **mechanical gate** that reads a
 real plan and refuses a real delete, a one-paragraph preview of a **structural** guardrail that
@@ -11,6 +16,10 @@ build yourself, wrapping the real `--permission-mode plan` mechanic M02 taught i
 propose-then-approve workflow. You'll watch a real delete destroy a real object with no gate in
 the way, then watch the exact same delete get refused once the gate is wired in, then build a
 second, independent guardrail on top of it that a human has to approve before anything applies.
+
+By the end you'll have a small library of your own: `hooks/blast_radius_gate.sh` and
+`harness/{propose,approve,apply_with_approval}.sh`, three real scripts that stand between an agent
+and a real apply, all proven against the same bucket that started this lab.
 
 ## Pre Requisites
 
@@ -465,16 +474,18 @@ guardrail should run last?
 
 #### Summary
 
-You watched an ungated delete destroy a real object with nothing stopping it, then watched the
-identical delete get refused once a hook sat between the plan and the apply. A skill can only
-ever suggest. A hook runs regardless. Then you built a second, independent guardrail on top of it:
-a real `--permission-mode plan` session proposes, a real file gets saved, a real approval step
-refuses to let anything through until a human says yes, and a second real session applies exactly
-what was approved, still through the same mechanical gate. Three mechanisms, three different
-answers to "how do you stop this": catch it by shape, remove the ability to do it unreviewed, or
-require an explicit human yes before a second session is even allowed to act. M08 picks this up
-and generalizes it into a full harness, and M09 puts real cloud-shaped scanners in front of the
-same gate.
+The project is done: one small storage system, three independent guardrails built and proven
+against it. You watched an ungated delete destroy a real object with nothing stopping it, then
+watched the identical delete get refused once a hook sat between the plan and the apply. A skill
+can only ever suggest. A hook runs regardless. Then you built a second, independent guardrail on
+top of it: a real `--permission-mode plan` session proposes, a real file gets saved, a real
+approval step refuses to let anything through until a human says yes, and a second real session
+applies exactly what was approved, still through the same mechanical gate. Three mechanisms,
+three different answers to "how do you stop this": catch it by shape, remove the ability to do it
+unreviewed, or require an explicit human yes before a second session is even allowed to act. Take
+`hooks/blast_radius_gate.sh` and the `harness/` scripts with you, they're generic to any Terraform
+plan, not specific to this lab's buckets. M08 picks this up and generalizes it into a full
+harness, and M09 puts real cloud-shaped scanners in front of the same gate.
 
 ##### Reading List
 
