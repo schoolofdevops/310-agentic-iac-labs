@@ -1,18 +1,19 @@
-# Lab 1: Getting Started with Agentic IaC
+# Project 01: Build an Nginx Module Using Terraform and Checkov
 
 **Tier 0** · ~12 min · no agent, no cloud account, no `terraform apply`. Just Terraform and
 Checkov, both already in the devcontainer.
 
-**What you're building:** a small, real piece of infrastructure: an nginx web container
-serving one static page you control, with its rendered HTML kept on disk and a log-shipping
-credential handled the right way instead of hardcoded. Small on purpose. The point of this lab
-isn't the infrastructure, it's the loop you run against it.
+In this project, you will write a small Terraform module by hand, against a one-line intent,
+then run it through the same generate-verify-fix loop an agent runs later in this course:
+format, validate, plan, scan, fix. No agent yet, just you and the loop.
 
-Before you ever type a prompt at an agent, run its loop yourself. You're going to write that
-module against a one-line intent, the kind of thing you'd hand an agent later in this course,
-then push it through the same generate-verify-fix cycle a machine would run. Feel the shape of
-it as a human now, and when M02 hands the same loop to an agent, you'll recognize every step it
-skips or gets wrong.
+**What you're building, at a glance:**
+
+- A real nginx container, serving a static page rendered to disk
+- A hardcoded secret, planted on purpose, for Checkov to catch
+- A real `terraform plan`, read end to end before anything runs
+- A real fix: pull the secret out, mark it `sensitive`, rescan clean
+- A first look at what an agent produces for this exact same intent
 
 ## Pre Requisites
 
@@ -34,7 +35,7 @@ Here's the one-line prompt. Read it the way an agent would, as the only instruct
 > rendered HTML kept on disk so I can diff it in git. No secrets in the container. I don't
 > need it exposed outside this machine.
 
-## Get the starter module
+## Step 1: Get the starter module
 
 A skeleton is already written for you. This isn't a Terraform syntax course yet; it's a
 verification-loop course. **Copy** it into your own working directory:
@@ -104,7 +105,7 @@ Read it against the intent above before you run anything. It's a fair reading of
 static page, kept on disk, a container that stays local. There's also a `log_shipper_key`
 variable that isn't part of the intent at all. Keep that in mind; you'll come back to it.
 
-## Check the syntax floor
+## Step 2: Check the syntax floor
 
 **Format** the module first. This is the cheapest check there is, and it says nothing about
 whether the code is good, only whether it's readable:
@@ -132,7 +133,7 @@ Success! The configuration is valid.
 Valid and formatted only means Terraform can parse it. It says nothing about whether it's a good
 idea.
 
-## Read the plan
+## Step 3: Read the plan
 
 **Plan** it, and actually read the output instead of skimming past it:
 
@@ -188,7 +189,7 @@ Plan: 4 to add, 0 to change, 0 to destroy.
 Four resources, nothing destructive, nothing surprising. `terraform plan` will tell you a plaintext
 key is about to land in a file. If you were reading fast, this is the line you'd miss.
 
-## Run Checkov: it fails
+## Step 4: Run Checkov, watch it fail
 
 ```
 checkov -d .
@@ -214,7 +215,7 @@ is sitting in your source. It found one. That `TODO` comment in the starter file
 It's exactly the kind of shortcut an agent takes under time pressure, and exactly what a scanner
 is for.
 
-## Fix it, re-run, get to green
+## Step 5: Fix it, re-run, get to green
 
 The fix isn't to delete the feature. The log shipper is a real requirement. It's to stop typing
 the key into the module. Pull the `default` out of the variable and mark it `sensitive`, so the
@@ -338,37 +339,30 @@ Write three lines, in your own words, in a file called `notes.md` next to your m
 There's no wrong answer here. Keep the file: you'll compare it against your own answer again at
 the end of the course, in the capstone.
 
-#### Summary
+## Validation
 
-You just ran a generate-verify-fix loop by hand: write against an intent, check the syntax floor,
-read the plan, scan for what the plan doesn't tell you, fix, re-verify. Every later module in this
-course automates one more piece of what you just did manually. M02 hands the typing to an agent,
-M06 hands the gate a hook, M09 puts real cloud-shaped scanners in front of `apply`. You'll
-recognize the shape each time, because you just did it yourself.
-
-##### Reading List
-
-- [Checkov docs: secrets scanning](https://www.checkov.io/3.Custom%20Policies/Secrets%20Policies.html)
-- [Terraform: docker_container resource (kreuzwerker/docker)](https://registry.terraform.io/providers/kreuzwerker/docker/latest/docs/resources/container)
-- `reading/concepts.md` in this module: the four asymmetries between infrastructure and
-  application code, including why a leaked key in a `.tf` file is a worse class of mistake than
-  the same key in application code
-
-##### Search Keywords
-
-- terraform fmt, terraform validate, terraform plan
-- checkov, secrets scanning, CKV_SECRET_2
-- sensitive variable, TF_VAR_
-- docker provider (terraform), local provider (terraform)
-- generate-verify-fix loop
-
-##### Re-verify
-
-`lab/run.sh` checks both `starter` and `solution` for real: starter must fail checkov on
-`CKV_SECRET_2`, solution must be clean. Run it whenever the pinned provider or checkov
-versions in this lab get bumped:
+Run the real check yourself, starter and solution both, whenever the pinned provider or
+checkov versions in this project get bumped:
 
 ```
 cd modules/module-01-clickops-to-agents/lab
 ./run.sh
 ```
+
+`run.sh` checks:
+
+- `starter` must fail checkov on `CKV_SECRET_2`
+- `solution` must be clean
+
+## Summary
+
+What you built:
+
+- A real nginx container, applied against a plan you read end to end
+- A hardcoded secret, caught by Checkov, the same way an agent will hit it later
+- A real fix: pull the secret out, mark it `sensitive`, rescan clean
+- A first look at what an agent produces for this exact intent, in `lab/solution/main.tf`
+
+Every later module in this course automates one more piece of what you just did by hand: M02
+hands the typing to an agent, M06 hands the gate a hook, M09 puts real scanners in front of
+`apply`. You'll recognize the pattern each time, because you just did it yourself.
