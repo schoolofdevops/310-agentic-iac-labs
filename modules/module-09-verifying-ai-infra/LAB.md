@@ -3,10 +3,16 @@
 **Tier 1** · ~20 min · Docker socket mounted, `floci/floci:1.7.0` pinned, provider stub from
 `labs/shared/floci-spike/provider.tf`, same Tier 1 rules as every hands-on lab since M04.
 
+The project in this lab is a real S3 module for a reports-and-backups service, two
+buckets, `reports` and `backups`, one of them deliberately left unhardened. You are not
+writing new Terraform. You are building the pipeline that decides whether this project's
+Terraform is safe to apply, the same one you have carried as a sentence since module one:
+the agent proposes, the pipeline decides.
+
 You've read the numbers: identical code, Trivy 7 findings, Checkov 25. Now you run both
-scanners yourself, write the one rule neither tool knows, wire a cost gate honestly, and
-assemble all of it into a single pipeline script that blocks on the first real failure,
-exactly the shape `pipeline.sh` in this lab folder already is.
+scanners yourself against this module, write the one rule neither tool knows, wire a cost
+gate honestly, and assemble all of it into a single pipeline script that blocks on the
+first real failure, exactly the shape `pipeline.sh` in this lab folder already is.
 
 ## Pre Requisites
 
@@ -208,11 +214,13 @@ Then fix it and confirm a clean pass.
 
 #### Summary
 
-You ran the exact pipeline from module one's thesis, for real: scan with two tools because
-one alone is a coverage gap, write the policy check for the rule only your team knows,
-treat cost as a gate instead of a report, and assemble all of it in cheap-to-expensive
-order. M10 and M11 put this same pipeline in front of a real CI system. The capstone puts
-it in front of everything you build there.
+You built one project in this lab: a five stage pipeline that decides whether the
+reports-and-backups module is safe to apply, not just a module. Scan with two tools
+because one alone is a coverage gap, write the policy check for the rule only your team
+knows, treat cost as a gate instead of a report, and assemble all of it in
+cheap-to-expensive order, exactly the thesis module one opened with, now real. M10 and M11
+put this same pipeline in front of a real CI system. The capstone puts it in front of
+everything you build there.
 
 ##### Reading List
 
