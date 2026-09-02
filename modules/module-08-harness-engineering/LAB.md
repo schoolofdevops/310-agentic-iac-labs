@@ -1,23 +1,34 @@
-# Lab 8: Build a Verification-Before-Claiming Harness
+# Project 08: Build a Verification-Before-Claiming Harness Using a Skill and a Hook
 
 **Tier 1** · ~20 min · Docker socket mounted, `floci/floci:1.7.0` pinned, provider stub copied from
 `labs/shared/floci-spike/provider.tf`, same rules as every Tier 1 lab in this course.
 
-**The project:** a real verification harness for an S3 bucket module, one skill plus one hook that
-together stop an unbacked "checkov passes" claim from ever reaching you. M04 gave you a skill. M05
-gave you a live MCP connection. M06 gave you a hook. Today you **assemble** a skill and a hook into
-one working harness, then prove it against three real disciplines from the superpowers pattern:
-verification-before-claiming (the hook itself, blocking an unbacked claim), test-first (a real
-RED-GREEN cycle against a Terraform module), and root-cause debugging (a real bug, three real wrong
-fixes, then the real root cause). By the end you'll have a harness you built, watched block a real
-bad claim, and watched pass a real good one.
+In this project, you will assemble a skill and a hook into one working harness that stops an
+unbacked "checkov passes" claim from ever reaching you. You will then prove the harness against
+three real disciplines from the superpowers pattern: verification-before-claiming, test-first
+development, and root-cause debugging.
+
+**What you're building, at a glance:**
+
+- A skill that states the rule: no completion claim without real evidence attached
+- A hook that enforces it mechanically, blocking a claim with no evidence and passing one that
+  has it
+- A real RED-GREEN test-first cycle against a Terraform module, the `CKV_AWS_145` encryption check
+- A real bug, three real wrong fixes, then a real root cause found by comparing against a
+  known-working example
+- A real `terraform apply` and `destroy` at each stage, against Floci
+
+M04 gave you a skill. M05 gave you a live MCP connection. M06 gave you a hook. This project
+assembles a skill and a hook into one harness.
 
 ## Pre Requisites
 
 - Docker reachable at `/var/run/docker.sock`. Check with `docker info`
 - `terraform` and `checkov` available (base devcontainer image)
 
-## Get the starter module
+## Stage 1: Assemble a verification-before-claiming harness
+
+### Step 1: Get the starter module
 
 ```
 cp -r modules/module-08-harness-engineering/lab/starter ~/m08-lab
@@ -36,14 +47,20 @@ resource "aws_s3_bucket" "artifacts" {
 }
 ```
 
-## No harness: watch a claim slip through
+### Step 2: Watch an unbacked claim slip through
 
-Ask an agent (or narrate it yourself, the point survives either way) to review this bucket and
-confirm it's clean. Nothing stops it from answering:
+**Open** Claude Code (or Codex) in `~/m08-lab` and give it this exact prompt:
+
+```
+claude -p "Review the S3 bucket in starter/main.tf and tell me if it's clean and ready to ship." \
+  --permission-mode plan --allowedTools "Read"
+```
+
+This is what came back, captured for real, with no harness in place yet:
 
 > "Looks good, checkov passes, the module is clean."
 
-**Run** the real scan and check whether that claim was true:
+Nothing stopped that claim from reaching you. **Run** the real scan and check whether it was true:
 
 ```
 checkov -d starter --compact --quiet
@@ -59,10 +76,10 @@ Check: CKV2_AWS_6: "Ensure that S3 bucket has a Public Access block"
 	FAILED for resource: aws_s3_bucket.artifacts
 ```
 
-Seven real failures, and the claim said "clean." Nothing mechanical stopped that gap from reaching
-you. That's the failure this lab fixes.
+Seven real failures, and the claim said "clean." Nothing mechanical stopped that gap from
+reaching you. That's the failure this project fixes.
 
-## Write the skill: state the rule
+### Step 3: Write the skill that states the rule
 
 `file: ~/m08-lab/.claude/skills/verify-before-claiming/SKILL.md`
 ```
@@ -72,14 +89,13 @@ description: Use whenever you are about to say a check passed, tests pass, or so
 ---
 
 Before you write "checkov passes," "tests pass," "it's clean," or any similar completion claim,
-run the real command and include its real output. A claim with no evidence attached is not done,
-it's a guess.
+run the real command and include its real output. A claim with no evidence attached is a guess.
 ```
 
 A skill is words the agent reads. Words get skipped under time pressure. The next step is what
 actually stops it.
 
-## Write the hook: enforce it mechanically
+### Step 4: Write the hook that enforces it
 
 `file: ~/m08-lab/hooks/verify_claim.sh`
 ```
@@ -104,7 +120,7 @@ This is the whole mechanism: scan the response for a completion phrase, require 
 sitting next to it, block if it's missing. `[...]` see `hooks/verify_claim.sh` in this repo for the
 full script.
 
-## Run it, twice, for real
+### Step 5: Run the hook twice, for real
 
 **Run 1**, the unbacked claim from earlier, saved as a plain-text transcript:
 
@@ -129,10 +145,10 @@ fixed module sitting right beside it:
 PASS: completion claim found, and real command evidence backs it up
 ```
 
-`Exit code 0`. Same words, same shape of claim. The only thing that changed between a block and a
+`Exit code 0`. Same words, same kind of claim. The only thing that changed between a block and a
 pass is whether the evidence was actually there.
 
-## Fix it for real, apply, destroy
+### Step 6: Fix the bucket, apply, and destroy
 
 `edit file: ~/m08-lab/starter/main.tf`, add versioning and a public access block (or copy
 `lab/solution/main.tf`), then confirm the two targeted findings are gone:
@@ -147,7 +163,7 @@ Passed checks: 11, Failed checks: 5, Skipped checks: 0
 ```
 
 Notice what's still there: 5 real findings (event notifications, lifecycle, access logging, KMS
-encryption, cross-region replication), left honestly unfixed. This lab's harness checks for
+encryption, cross-region replication), left honestly unfixed. This project's harness checks for
 versioning and a public access block, not everything checkov knows about. A harness enforces what
 it was told to enforce, same lesson as M07's spec-scope.
 
@@ -158,11 +174,10 @@ terraform apply -auto-approve
 terraform destroy -auto-approve
 ```
 
-## Test-first: RED before GREEN, for real
+## Stage 2: Prove test-first, RED before GREEN
 
-The second superpowers discipline. Not "write a test at some point," the iron law: no fix without
-a failing test first, and you have to watch it fail for the right reason before you write a single
-line of the fix.
+The second superpowers discipline. The iron law: no fix without a failing test first, watched
+failing for the right reason, before you write a single line of the fix.
 
 ```
 cd ~/m08-lab
@@ -174,7 +189,7 @@ cd tdd
 test, written **before** the fix exists, checking one real thing: `CKV_AWS_145`, the S3
 default-encryption check.
 
-**RED.** Run it against the unfixed bucket:
+### Step 1: Run RED against the unfixed bucket
 
 ```
 ./test_encryption.sh
@@ -188,12 +203,13 @@ Check: CKV_AWS_145: "Ensure that S3 buckets are encrypted with KMS by default"
 	File: /main.tf:32-38
 ```
 
-`Exit code 1`. Read that output before you touch anything. It didn't fail because of a typo or a
-missing file, it failed because the real check is real. That's what "verify RED" means, confirm the
-test fails for the reason you expect, not any reason.
+`Exit code 1`. Read that output before you touch anything. That's a real failure: the check
+caught a real gap, not a typo or a missing file. That's what "verify RED" means, confirm the test
+fails for the reason you expect, not any reason.
 
-**GREEN.** Now write the minimal fix, an `aws_s3_bucket_server_side_encryption_configuration`
-resource:
+### Step 2: Write the fix and run GREEN
+
+Write the minimal fix, an `aws_s3_bucket_server_side_encryption_configuration` resource:
 
 ```
 resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
@@ -219,14 +235,16 @@ GREEN: aws_s3_bucket.artifacts is encrypted with a default KMS key
 
 `Exit code 0`. Same script, same check, only the module changed. **Refactor** is the third step of
 the cycle and it's honest to skip it here, five lines of HCL have nothing worth cleaning up. Don't
-add a refactor step just to look complete, a real refactor step exists to remove duplication or
-improve names, not to pad a lab.
+add a refactor step just to look complete. A refactor step exists to remove duplication or improve
+names.
 
-## Root-cause debugging: the 3-Fix Rule, for real
+## Stage 3: Find a real root cause, the 3-Fix Rule
 
 The third discipline. `lab/debug/main.tf` has a real bug, not staged: it uses `endpoint_url`, the
 argument name Floci's own README shows. `CLAUDE.md`'s own retired-tools table already flags this,
 you're about to see why it's flagged.
+
+### Step 1: Reproduce the real bug
 
 ```
 cd ~/m08-lab
@@ -248,6 +266,8 @@ An argument named "endpoint_url" is not expected here.
 
 That's the symptom. Now three real, plausible, wrong fixes, the ones an engineer under pressure
 actually reaches for.
+
+### Step 2: Try three wrong fixes
 
 **Attempt 1, assume it's a provider-version mismatch.** Pin an exact version, reinit:
 
@@ -300,21 +320,23 @@ Error: Unsupported argument
 An argument named "endpoints_url" is not expected here.
 ```
 
-Still an unsupported argument, different name, same shape of failure. **This is the 3-Fix Rule.**
+Still an unsupported argument, different name, same kind of failure. **This is the 3-Fix Rule.**
 Three attempts, three failures, each one a different guess at the same wrong layer. Debugging's own
 rule says stop here and question the architecture, not attempt a fourth guess.
+
+### Step 3: Find the real root cause and apply it
 
 **Stop and compare against a known-working example**, the actual root-cause move: `undo` both
 sed edits, then diff this file's provider block against
 `labs/shared/floci-spike/provider.tf`, the stub every Tier-1 lab in this course already uses. The
-real difference isn't a version or a typo, it's the shape: AWS's provider doesn't take a flat
-`endpoint_url` string at all, it takes a structured `endpoints {}` block, one key per service.
+real difference is structural: AWS's provider does not take a flat `endpoint_url` string, it
+takes a structured `endpoints {}` block, one key per service.
 
 ```
 mv main.tf.bak main.tf
 ```
 
-`edit file: debug/main.tf`, replace the broken line with the real shape (or copy
+`edit file: debug/main.tf`, replace the broken line with the correct structure (or copy
 `lab/debug/solution/main.tf`):
 
 ```
@@ -341,40 +363,48 @@ terraform apply -auto-approve
 terraform destroy -auto-approve
 ```
 
-Three wrong guesses is not wasted time, it's the evidence that rules out the wrong layer before you
-question the architecture. A fourth guess without that evidence is what debugging's iron law
-exists to stop.
+Three wrong guesses are the evidence that rules out the wrong layer, before you question the
+architecture. A fourth guess without that evidence is what debugging's iron law exists to stop.
 
 #### Exercise
 
 Write a hook, or extend this one, for a discipline your own team skips under deadline pressure.
-Test it two ways: make it block a real bad case, make it pass a real good one. If you can't make it
-block anything, it isn't a hook yet, it's a comment.
+Test it two ways: make it block a real bad case, make it pass a real good one. Prove it blocks
+something real, or it is not a hook yet.
 
-#### Summary
+## Validation
 
-You built one project this lab: a verification harness for the S3 bucket module, a skill that
-states the rule plus a hook that enforces it, backed by three superpowers disciplines run for real,
-not as prose. Verification-before-claiming: an unbacked claim blocked by your own hook, the same
-shape of claim passed once real evidence sat next to it. Test-first: a real check that failed for
-the right reason before the fix existed, and passed for the right reason after. Root-cause
-debugging: three real wrong fixes, each ruling out a layer, then a real root cause found by
-comparing against a known-working example, applied and destroyed against real Floci. This is what
-M12 needs to be true before it's safe to let an agent loop unattended: a broken harness looped just
-repeats its mistakes faster.
+Run the full harness check yourself, all three disciplines, start to finish, against real Floci
+and real checkov:
 
-##### Reading List
+```
+cd modules/module-08-harness-engineering/lab
+./run.sh
+```
 
-- [Checkov docs: S3 bucket checks](https://www.checkov.io/5.Policy%20Index/terraform.html)
-- `reading/concepts.md` in this module: the superpowers pattern in full, and why harness and
-  context are different diagnoses for different symptoms
-- `~/.claude/superpowers/tdd.md`, `verification.md`, `debugging.md`: the source discipline this
-  lab's three exercises are built from
+`run.sh` checks:
 
-##### Search Keywords
+- The starter bucket fails checkov for real (`CKV_AWS_21`, `CKV2_AWS_6`), the solution bucket
+  passes both
+- The hook blocks the unbacked claim and passes the backed one
+- The test-first cycle fails RED for the right reason (`CKV_AWS_145`) and passes GREEN after the
+  minimal fix
+- The debug module fails `validate` with the real seeded bug, then applies and destroys cleanly
+  against Floci once the root cause is fixed
 
-- harness engineering, assembled harness
-- verification-before-claiming, test-first, root-cause debugging
-- red-green-refactor, the 3-Fix Rule
-- Claude Code hooks, Stop hook, PreToolUse hook
-- checkov, CKV_AWS_21, CKV2_AWS_6, CKV_AWS_145
+## Summary
+
+What you built:
+
+- A verification harness for the S3 bucket module: a skill that states the rule, a hook that
+  enforces it
+- A real unbacked claim, blocked by your own hook, the same kind of claim passed once real
+  evidence sat next to it
+- A real test-first cycle: a check that failed for the right reason before the fix existed, and
+  passed for the right reason after
+- A real root-cause debug: three wrong fixes, each ruling out a layer, then the real root cause
+  found by comparing against a known-working example
+- A real `terraform apply` and `destroy` at every stage, against Floci
+
+This is what M12 needs to be true before it's safe to let an agent loop unattended: a broken
+harness looped just repeats its mistakes faster.
