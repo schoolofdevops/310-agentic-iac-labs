@@ -1,23 +1,25 @@
-# Lab 12: Write a Real Stopping Condition, Wire a Real Trigger
+# Project 12: Build a Self-Healing Compliance Loop With a GitHub Actions Trigger
 
 **Tier 0** · ~15 min · no cloud, no cluster, no new account. Reuses the same small Terraform
-module shape from Lab 1, this time run under a loop instead of by hand.
+module from Project 01, this time run under a loop instead of by hand.
 
-Every earlier lab in this course, you ran once. This one you run **three times**, on purpose,
-and you'll watch it behave differently each time: continue, stop, then stop again and do
-nothing, because it's already done. That's the whole point of a stopping condition, it has to
-be checkable by a machine, not just "looks done" to a human.
+In this project, you will build a small unattended loop: a script that checks one exact
+condition, fixes it if it isn't met, and does nothing once it already is. Then you will wire
+that same script behind a real GitHub Actions `schedule:` trigger, so it runs on its own, no
+human watching it.
 
-**The project:** a real, unattended nightly check that finds and fixes one specific,
-checkable compliance finding, a hardcoded secret in a Terraform variable, on its own, then
-correctly does nothing once it's already fixed. That's the smallest honest version of a
-self-healing loop: one exact stopping condition, one real trigger, no human watching it run.
-You'll build the script, run it three times by hand to prove all three outcomes, then wire
-the same script behind a GitHub Actions `schedule:` trigger so it runs unattended.
+**What you're building, at a glance:**
+
+- A stopping-condition script that checks exactly one thing: does `checkov` exit 0
+- A real fix, applied automatically the moment the condition isn't met: a hardcoded secret
+  pulled out of a Terraform variable
+- Three real runs against the same working copy, three different outcomes: continue-and-fix,
+  stop, stay stopped
+- A real GitHub Actions `schedule:` trigger, exactly what you'd commit to a real repo
 
 ## Pre Requisites
 
-- `terraform` and `checkov`, same as every earlier Tier 0/1 lab in this course
+- `terraform` and `checkov`, same as every earlier Tier 0/1 project in this course
 - `python3` and `PyYAML` (already available in the devcontainer) to validate the trigger config
 
 ## The starter module
@@ -45,10 +47,10 @@ resource "local_file" "log_shipper_env" {
 }
 ```
 
-Same shape as Lab 1's starter, the same hardcoded key, on purpose. This time you're not fixing
-it by hand. You're writing a loop that fixes it.
+Same starter as Project 01's, the same hardcoded key, on purpose. This time you are not fixing
+it by hand. You are writing a loop that fixes it.
 
-## Write the stopping condition
+## Step 1: Write the stopping condition
 
 A real stopping condition is a script that answers exactly one question: has the target state
 been reached, yes or no, checkably. Here's the whole thing:
@@ -76,10 +78,10 @@ fi
 echo "CONTINUE: stopping condition not met yet, checkov still failing"
 ```
 
-Read the check. `checkov -d .` on the current working copy, and its exit code, nothing else.
-No "does this look right." An exit code either is 0 or it isn't.
+Read the check. `checkov -d .` on the current working copy, and its exit code, nothing else. An
+exit code either is 0 or it isn't. A human deciding something "looks done" doesn't enter into it.
 
-**Try it once**, from a fresh copy:
+**Run it once**, from a fresh copy:
 
 ```
 bash lab/solution/loop.sh /tmp/m12-try
@@ -91,14 +93,14 @@ CONTINUE: stopping condition not met yet, checkov still failing
 ```
 
 Exactly what you'd expect. The starter still has the hardcoded key. The loop noticed, and said
-so, in a form a machine (not just you) can act on.
+so, in a form a machine can act on.
 
-## Give it something to do when it continues
+## Step 2: Give the loop something to do when it continues
 
-A loop that only reports "not done yet" isn't useful on its own, something has to act on that
-report. In a real setup that's an agent, at step 5 or step 6 depending on how much you trust
-it. For this lab, wire in the exact fix you already know from Lab 1, real code, applied for
-real when the condition isn't met:
+A loop that only reports "not done yet" needs something to act on that report. In a real setup
+that's an agent, gated by the plan-review-approve-apply harness M06 built. For this project,
+wire in the exact fix you already know from Project 01, real code, applied for real when the
+condition isn't met:
 
 `edit file: lab/solution/loop.sh`
 ```
@@ -114,7 +116,7 @@ fi
 exit 1
 ```
 
-## Run it three times, watch it change state each time
+## Step 3: Run it three times, watch it change state each time
 
 The same command you already ran, run again against the **same** working copy this time,
 `solution/work` instead of a throwaway `/tmp` path:
@@ -153,14 +155,14 @@ STOPPED: stopping condition met, checkov exits 0
 ```
 
 Same command, three real runs, three different outcomes: continue-and-fix, stop, stop-again.
-That third run is the one people forget to test. A trigger that fires after the work is
-already done should notice that immediately and do nothing, not re-run the fix, not error out.
+That third run is the one people forget to test. A trigger that fires after the work is already
+done should notice that immediately and do nothing, not re-run the fix, not error out.
 `echo $?` after each run: `1`, then `0`, then `0`.
 
-## Wire a real trigger
+## Step 4: Wire a real trigger
 
 The loop only runs when something re-invokes it. Here's a real one, a GitHub Actions
-`schedule:` trigger, exactly the shape you'd commit to `.github/workflows/` in a real repo:
+`schedule:` trigger, exactly what you'd commit to `.github/workflows/` in a real repo:
 
 `file: lab/solution/trigger-workflow.example.yml`
 ```
@@ -191,26 +193,33 @@ Write the two-line escalation note this module's reading asked for:
   slow?
 
 There's no wrong answer. Keep the note, the capstone asks you to compare it against your own
-answer from Lab 1's exercise.
+answer from Project 01's exercise.
 
-#### Summary
+## Validation
 
-You built the project this lab set out to build: a real, unattended nightly check with one
-exact, checkable stopping condition and a real trigger behind it, and watched it behave three
-different ways across three identical invocations: continue and fix, stop, stay stopped. That's
-the whole loop layer, the third one from module one, closed. Every earlier module built context
-or harness. This lab is the one that finally runs one of them on its own, on a schedule, and
-knows when to quit.
+Run the full check yourself, all three outcomes, plus the trigger config itself:
 
-##### Reading List
+```
+cd modules/module-12-loop-multiagent-economics/lab
+./run.sh
+```
 
-- [GitHub Actions: schedule events](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule)
-- `reading/concepts.md` in this module: the full argument for why a stopping condition has to
-  be exact, and what step 6 requires before it's safe
+`run.sh` checks:
 
-##### Search Keywords
+- The trigger config is a real, valid cron expression with `workflow_dispatch` alongside it
+- Run 1 prints `CONTINUE` and applies the real fix
+- Run 2, same working copy, prints `STOPPED`
+- Run 3, same working copy again, is still `STOPPED`, proving the loop is idempotent
 
-- stopping condition, loop trigger
-- GitHub Actions schedule, cron
-- step 6, unattended
-- idempotent re-trigger
+## Summary
+
+What you built:
+
+- A stopping-condition script with exactly one checkable question: does `checkov` exit 0
+- A real fix, applied automatically, not by hand
+- Three real runs proving three states: continue-and-fix, stop, stay stopped
+- A real GitHub Actions `schedule:` trigger, ready to commit to a real repo
+
+That's the loop layer, the third one from Module 1, closed. Every earlier module built context
+or harness. This project is the one that finally runs one of them on its own, on a schedule,
+and knows when to quit.
