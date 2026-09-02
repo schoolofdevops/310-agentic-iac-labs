@@ -4,3 +4,4 @@
 *.tfstate.*
 *.tfplan
 tfplan.json
+eval/fixture-live.tf

@@ -64,6 +64,12 @@ echo "    ok, pipeline.sh blocks starter, passes solution"
 rm -rf module/.terraform module/.terraform.lock.hcl module/terraform.tfstate* \
        solution/.terraform solution/.terraform.lock.hcl solution/terraform.tfstate*
 
+echo "==> Step 6: eval rubric"
+python3 eval/rubric.py eval/fixture-bad.tf && { echo "FAIL: rubric should have rejected fixture-bad.tf"; exit 1; }
+python3 eval/rubric.py eval/fixture-good.tf || { echo "FAIL: rubric should have accepted fixture-good.tf"; exit 1; }
+echo "eval rubric: PASS"
+
 echo
 echo "LAB PASSED: opening demo reproduced (trivy 7 / checkov 25), starter fails both scanners"
-echo "and conftest, solution passes everything, assembled pipeline.sh blocks starter and passes solution"
+echo "and conftest, solution passes everything, assembled pipeline.sh blocks starter and passes solution,"
+echo "and the eval rubric rejects fixture-bad.tf and accepts fixture-good.tf"

@@ -18,6 +18,8 @@ buckets, one deliberately left unhardened.
 - **A real cost gate**, wired honestly: it runs for real if you have an Infracost key, and
   skips with a clear message if you don't, never a guessed number
 - **A five-stage pipeline script** that blocks on the first real failure, cheap checks first
+- **A deterministic eval rubric**, run against a real agent's own Terraform output, checking
+  the agent's claim rather than the infrastructure
 
 ## Pre Requisites
 
@@ -211,6 +213,120 @@ than an inline comment. Inline `#checkov:skip` comments were tested against this
 checkov version and did not actually suppress those findings, the CLI flag did. That's
 worth remembering the next time a suppression silently doesn't work: verify it did.
 
+## Step 6: Evaluate the Agent's Output
+
+Everything so far in this project checks the *infrastructure*. This step checks the
+*agent's output* against a rubric, a different question: whether the agent did what it was
+actually asked, regardless of whether the bucket it produced happens to be safe.
+
+**Write** a deterministic rubric, plain Python, no model involved, that checks an agent's
+Terraform output against M04's own required-tags convention (`Environment`, `Owner`,
+`ManagedBy`):
+
+`file: eval/rubric.py`
+```python
+#!/usr/bin/env python3
+"""Deterministic rubric: does this Terraform output tag every S3 bucket the way
+M04's convention requires? No model involved, plain text parsing, exit 0 or 1."""
+import re
+import sys
+
+REQUIRED_TAGS = ["Environment", "Owner", "ManagedBy"]
+
+
+def find_bucket_blocks(text):
+    blocks = []
+    for match in re.finditer(r'resource\s+"aws_s3_bucket"\s+"([^"]+)"\s*\{', text):
+        name = match.group(1)
+        start = match.end()
+        depth = 1
+        i = start
+        while depth > 0 and i < len(text):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+            i += 1
+        blocks.append((name, text[start:i]))
+    return blocks
+
+
+def check(path):
+    text = open(path, encoding="utf-8").read()
+    blocks = find_bucket_blocks(text)
+    if not blocks:
+        return False, ["no aws_s3_bucket resource found"]
+    violations = []
+    for name, body in blocks:
+        missing = [t for t in REQUIRED_TAGS if t not in body]
+        if missing:
+            violations.append(f"aws_s3_bucket.{name}: missing tags {missing}")
+    return (not violations), violations
+
+
+if __name__ == "__main__":
+    ok, violations = check(sys.argv[1])
+    if ok:
+        print(f"PASS: every bucket in {sys.argv[1]} carries {REQUIRED_TAGS}")
+        sys.exit(0)
+    print(f"FAIL: {sys.argv[1]} does not meet the tagging rubric")
+    for v in violations:
+        print(" -", v)
+    sys.exit(1)
+```
+
+**Run** it against a seeded failure first:
+
+```
+python3 eval/rubric.py eval/fixture-bad.tf
+```
+
+`[ Expected output ]`
+```
+FAIL: eval/fixture-bad.tf does not meet the tagging rubric
+ - aws_s3_bucket.reports: missing tags ['Owner', 'ManagedBy']
+ - aws_s3_bucket.backups: missing tags ['Environment', 'Owner', 'ManagedBy']
+```
+
+`Exit code 1`. `reports` is missing `Owner` and `ManagedBy`, `backups` has no `tags` block
+at all.
+
+**Run** it against a fixed fixture:
+
+```
+python3 eval/rubric.py eval/fixture-good.tf
+```
+
+`[ Expected output ]`
+```
+PASS: every bucket in eval/fixture-good.tf carries ['Environment', 'Owner', 'ManagedBy']
+```
+
+`Exit code 0`.
+
+**Ask** a real agent to produce a third fixture, then grade it with the same rubric:
+
+```
+claude -p "Write a Terraform aws_s3_bucket resource named 'reports', bucket name m09-eval-reports-live. Tag it Environment=lab, Owner=m09-lab, ManagedBy=terraform-module-conventions-skill. Write only the resource block to eval/fixture-live.tf, nothing else." \
+  --permission-mode acceptEdits --allowedTools "Write"
+
+python3 eval/rubric.py eval/fixture-live.tf
+```
+
+This is what came back, captured for real, with no skill in the folder:
+
+`[ Expected output ]`
+```
+PASS: every bucket in eval/fixture-live.tf carries ['Environment', 'Owner', 'ManagedBy']
+```
+
+`Exit code 0`. The agent tagged the bucket correctly because the prompt stated the tags
+explicitly. The rubric would have caught it either way.
+
+The rubric does not care how convincingly the agent explained its reasoning. It checks the
+output against a fixed rule, the same discipline M04's bundled script brought to CIDR
+checking, applied here to the agent's own claim about what it built.
+
 #### Exercise
 
 Add a third bucket to `module/main.tf`, on purpose leave its `Owner` tag off, and run
@@ -234,6 +350,7 @@ cd modules/module-09-verifying-ai-infra/lab
 - The OPA policy fails on the starter module and passes on the solution
 - `pipeline.sh` blocks at stage 2 on the starter module and passes all five stages on the
   solution
+- The eval rubric rejects `eval/fixture-bad.tf` and accepts `eval/fixture-good.tf`
 
 ## Summary
 
@@ -244,6 +361,7 @@ What you built:
 - A real OPA policy for the one rule neither scanner can check
 - A cost gate wired to skip honestly, never to guess
 - A five-stage pipeline that blocks on the first real failure, cheap checks first
+- A deterministic eval rubric, graded against a real agent's own Terraform output
 
 Scan with two tools because one alone is a coverage gap. Write the policy check for the rule
 only your team knows. Treat cost as a gate, not a report. Assemble all of it in
