@@ -8,6 +8,13 @@ and you'll watch it behave differently each time: continue, stop, then stop agai
 nothing, because it's already done. That's the whole point of a stopping condition, it has to
 be checkable by a machine, not just "looks done" to a human.
 
+**The project:** a real, unattended nightly check that finds and fixes one specific,
+checkable compliance finding, a hardcoded secret in a Terraform variable, on its own, then
+correctly does nothing once it's already fixed. That's the smallest honest version of a
+self-healing loop: one exact stopping condition, one real trigger, no human watching it run.
+You'll build the script, run it three times by hand to prove all three outcomes, then wire
+the same script behind a GitHub Actions `schedule:` trigger so it runs unattended.
+
 ## Pre Requisites
 
 - `terraform` and `checkov`, same as every earlier Tier 0/1 lab in this course
@@ -188,11 +195,12 @@ answer from Lab 1's exercise.
 
 #### Summary
 
-You wrote a real stopping condition, a script with one exact, checkable answer, and watched it
-behave three different ways across three identical invocations: continue and fix, stop, stay
-stopped. You wired a real trigger next to it. That's the whole loop layer, the third one from
-module one, closed. Every earlier module built context or harness. This lab is the one that
-finally runs one of them on its own, on a schedule, and knows when to quit.
+You built the project this lab set out to build: a real, unattended nightly check with one
+exact, checkable stopping condition and a real trigger behind it, and watched it behave three
+different ways across three identical invocations: continue and fix, stop, stay stopped. That's
+the whole loop layer, the third one from module one, closed. Every earlier module built context
+or harness. This lab is the one that finally runs one of them on its own, on a schedule, and
+knows when to quit.
 
 ##### Reading List
 
