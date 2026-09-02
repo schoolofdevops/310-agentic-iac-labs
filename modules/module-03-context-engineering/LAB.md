@@ -3,11 +3,20 @@
 **Tier 0 → 1** · ~15 min · your own agent (Claude Code or Codex), the same
 `terraform` and `checkov` from M01.
 
+**The project:** a small, real Terraform module, one `docker` container running
+nginx, serving a static page you control, with a sidecar credential for
+shipping its access logs to S3. You will build this exact module three times
+in this lab, first to measure what a noisy scan actually costs you, then twice
+more to prove two separate claims about context engineering on the same code.
+By the end you will have a working module and three pieces of evidence, not
+just three exercises.
+
 M01 had you run a generate-verify-fix loop by hand. This lab covers all three
 disciplines from `reading/concepts.md`: **Reduce**, filtering noisy tool output
 before it enters the window; **Retain**, standing facts that survive a session
 reset; **Route**, a plan written to disk so a session with zero memory can pick
-it up correctly. Three short, real exercises, one per discipline.
+it up correctly. Each discipline gets its own stage below, building on the
+same module.
 
 ## Pre Requisites
 
@@ -16,11 +25,13 @@ it up correctly. Three short, real exercises, one per discipline.
 - An agent you can prompt directly, Claude Code or Codex, from a terminal in a
   scratch directory.
 
-## Reduce: measure it yourself
+## Stage 1, Reduce: measure it yourself
 
 Before touching an agent at all, **measure** what a raw tool call actually
-costs versus a filtered one. Reuse the 21-resource module from
-`labs/shared/floci-spike`, this course's own real Tier 1 spike:
+costs versus a filtered one. This stage needs more real findings than the
+nginx module alone would produce, so it borrows a bigger, already-real module:
+the 21-resource one from `labs/shared/floci-spike`, this course's own Tier 1
+spike. You will come back to your own nginx module for stages 2 and 3.
 
 ```
 cd labs/shared/floci-spike
@@ -41,19 +52,19 @@ reduction from one flag. **Read** `/tmp/verbose.txt` and count how many lines
 you'd actually act on versus how many you'd just scroll past. That gap is
 exactly what Reduce removes before it ever reaches an agent's context window.
 
-## The intent, again
+## Back to your own module: the intent
 
-Same as M01, read it the way an agent would:
+Here is the module you are actually building, read the way an agent would:
 
 > Give me a local nginx container for testing, serving a static page I control,
 > with its rendered HTML kept on disk so I can diff it in git. No secrets in the
 > container. I don't need it exposed outside this machine.
 
-## Retain: the AGENTS.md exercise
+## Stage 2, Retain: the AGENTS.md exercise
 
-Now the standing-context discipline: run the exact same intent twice, once
-with nothing written down, once with a real `AGENTS.md` in place, and read the
-difference for yourself.
+Now the standing-context discipline: build this exact module twice from the
+same intent, once with nothing written down, once with a real `AGENTS.md` in
+place, and read the difference for yourself.
 
 ### Run 1: no context
 
@@ -209,11 +220,13 @@ One variable block. That's the entire cost of writing `AGENTS.md` down once,
 against the entire cost of a scanner catching a real credential in source
 control after the fact. Notice which one you'd rather be doing every day.
 
-## Route: prove it yourself
+## Stage 3, Route: prove it yourself
 
-Retain proved that standing facts survive a reset. This exercise proves the
-harder claim: an in-progress plan can survive one too, as long as it never
-lived only in the conversation.
+Retain proved that standing facts survive a reset. This stage proves the
+harder claim on the same module: an in-progress plan can survive one too, as
+long as it never lived only in the conversation. The finding you are about to
+hand off is the exact one Retain's run 1 uncovered, the hardcoded secret, now
+picked up mid-fix by a session that never saw run 1 happen.
 
 **Write** a state file for an in-progress task, a real decision plus a real
 next action, not a vague TODO:
@@ -298,15 +311,16 @@ disciplines, reduce, retain, route, you were worst at before this lab.
 
 #### Summary
 
-Three real exercises, one per discipline. Reduce: one flag cut a real scan's
-output by 85% without losing a single finding. Retain: the same intent, twice,
-differed only by one file the agent read before it started. Route: a fresh
-session with zero memory finished a real task correctly because the plan
-lived on disk, not in the conversation that had already been cleared. None of
-this was a cleverer prompt or a bigger model. It was managing a resource that
-resets, on purpose, in three specific ways. M06 picks up where Retain's second
-finding leaves off: the gate for mistakes that writing something down can't
-fully prevent.
+One small module, built three times, three pieces of evidence. Reduce: one
+flag cut a real scan's output by 85% without losing a single finding. Retain:
+the same intent, on the same module, twice, differed only by one file the
+agent read before it started. Route: a fresh session with zero memory picked
+up that same module mid-fix and finished it correctly, because the plan lived
+on disk, not in the conversation that had already been cleared. None of this
+was a cleverer prompt or a bigger model. It was managing a resource that
+resets, on purpose, in three specific ways, on one real piece of infrastructure
+you can point to. M06 picks up where Retain's second finding leaves off: the
+gate for mistakes that writing something down can't fully prevent.
 
 ##### Reading List
 
