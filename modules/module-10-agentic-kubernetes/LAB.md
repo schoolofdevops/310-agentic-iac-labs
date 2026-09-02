@@ -1,15 +1,30 @@
-# Lab 10: Build a Database-as-a-Service Capability with Helm, Manifests, and Crossplane v2
+# Project 10: Build a Database-as-a-Service Capability Using Helm, Manifests, and Crossplane v2
 
-**Tier 2** · ~45 min · a real `kind` cluster, real Helm 4, real Crossplane v2, a real Postgres
-database delivered three different ways. Docker already required, same as every Tier 1 lab in
-this course. Numbered teardown at the end.
+**Tier 2** · ~45 min · a `kind` cluster, Helm 4, Crossplane v2, one Postgres database
+delivered three ways. Docker required, same as every Tier 1 lab in this course. Numbered
+teardown at the end.
 
-Everything up to this module ran against Terraform. This lab is the same discipline, propose,
-read the diff, apply, on a different substrate: a real Kubernetes control plane. PART I is a
-short warm-up with Crossplane's mechanics. PART II is the real build: the same database
-capability, delivered three ways, each a step up in how self-service it is. No Backstage, no
-catalog UI, this stays at the level a platform team actually operates: charts, manifests, and
-Kubernetes-native custom resources.
+In this project, you will build a self-service way to get a Postgres database on Kubernetes,
+the same database delivered three ways: raw manifests, a Helm chart, and a namespaced
+Crossplane resource. You will also have an agent propose a new database request on its own,
+reading only the schema you already applied.
+
+**What you're building, at a glance:**
+
+- A namespaced Crossplane XR warm-up: request a `ConfigMap` with no claim object, to see
+  Crossplane v2's pattern before anything harder
+- A real Postgres database, delivered three ways: raw Kubernetes manifests, a Helm chart, and
+  a namespaced Crossplane XR
+- Three real Crossplane failures, hit and fixed for real: a missing transform field, a missing
+  RBAC grant, a readiness check that does not apply to a `StatefulSet`
+- An agent proposing a second database request on its own, reading only the schema, no
+  `kubectl` access
+- A numbered teardown: cluster deleted, no orphan containers left behind
+
+Everything up to this module ran against Terraform. This project uses the same discipline,
+propose, read the diff, apply, on a different substrate: a real Kubernetes control plane. No
+Backstage, no catalog UI, this stays at the level a platform team actually operates: charts,
+manifests, and Kubernetes-native custom resources.
 
 ## Pre Requisites
 
@@ -137,10 +152,10 @@ NAME                            INSTALLED   HEALTHY   PACKAGE
 function-patch-and-transform    True        True      xpkg.upbound.io/crossplane-contrib/function-patch-and-transform:v0.9.0
 ```
 
-## PART I: warm-up, a namespaced XR with no claim object
+## Stage 1: Request a namespaced resource with no claim object
 
 Before building a real database, request something trivial, a `ConfigMap`, so you can see
-Crossplane v2's shape without a real workload's failure modes in the way.
+how Crossplane v2 behaves without a real workload's failure modes in the way.
 
 `file: lab/solution/xrd.yaml`
 ```
@@ -250,7 +265,7 @@ Delete the XR before moving on, PART II reuses this cluster:
 kubectl --context kind-m10-lab delete -f lab/solution/xr.yaml
 ```
 
-## PART II: the real capability, a database, delivered three ways
+## Stage 2: Deliver a database three ways
 
 A platform team's actual job is rarely "write one YAML file." It's "give every team a
 self-service way to get a database, at whatever level of hand-holding that team needs." Some
@@ -258,7 +273,7 @@ teams want the raw manifests to read and tweak. Some want a chart with sane defa
 want to ask for a database and get one. Build all three, on the same underlying Postgres, so you
 can see exactly what each layer buys you over the one below it.
 
-### Layer 1: raw manifests, the hard way
+### Step 1: Write the raw manifests by hand
 
 This is what every layer above eventually resolves to. Write it once, understand it, and every
 abstraction after this is honest about what it's hiding.
@@ -352,7 +367,7 @@ kubectl --context kind-m10-lab -n dbaas-manual exec postgres-0 -- \
 (1 row)
 ```
 
-### Layer 2: the same manifests, packaged as a Helm chart
+### Step 2: Package the manifests as a Helm chart
 
 Every field you just hardcoded (`appdb`, `appuser`, `512Mi`) becomes a value. This is the exact
 same Postgres, now installable by anyone on the team without reading or editing YAML.
@@ -403,7 +418,7 @@ kubectl --context kind-m10-lab -n dbaas-helm exec billing-db-postgres-0 -- \
 would take the whole thing back out, one command, no hunting for which manifests belong
 together.
 
-### Layer 3: a namespaced Crossplane XR, no Helm values, no claim
+### Step 3: Request a database as a namespaced Crossplane XR
 
 A chart is still something a human has to know exists and know the right flags for. The last
 layer turns "give me a database" into one small Kubernetes object, the same discipline the
@@ -531,7 +546,7 @@ billing   True     True    xdatabases.platform.m10.example.org    14m
 (1 row)
 ```
 
-## The agentic angle: an agent proposes the request, you approve it
+### Step 4: Have an agent propose a database request
 
 A team doesn't write YAML by reading an XRD's OpenAPI schema by hand every time, an agent that
 already knows this repo can. Ask Claude Code to propose a second database, for a different
@@ -629,38 +644,47 @@ docker ps -a --filter "name=m10-lab"
 
 Empty output means clean.
 
-#### Exercise
+#### Exercise: Stage 2
 
-Layer 1's manifests hardcode `POSTGRES_DB: appdb`. Write a second raw-manifest instance for a
+Step 1's manifests hardcode `POSTGRES_DB: appdb`. Write a second raw-manifest instance for a
 team that wants a database called `inventory`, without touching the Helm chart or Crossplane at
 all. What do you have to rename by hand to avoid colliding with the first instance, and how many
 of those renames does the Helm chart handle for you automatically?
 
-#### Summary
+## Validation
 
-You built one capability, a real Postgres database, three ways: raw manifests you can read
-end to end, a Helm chart anyone on the team can install without touching YAML, and a namespaced
-Crossplane XR that turns the whole thing into a five-line request. Along the way you hit three
-real Crossplane failures, a missing transform field, a missing RBAC grant, and a readiness
-check that doesn't apply to a `StatefulSet`, and fixed each one for a real, specific reason, not
-by guessing. `kubectl diff` played the same role `terraform plan` has played since module one,
-read the change before it lands. M11 picks this same cluster back up and puts a GitOps
-controller in front of it, so an agent proposing a change goes through a pull request and a
-review before anything reaches this cluster at all.
+Run the full build yourself, all three delivery layers plus the agent-proposed request,
+against a real `kind` cluster, start to finish:
 
-##### Reading List
+```
+cd modules/module-10-agentic-kubernetes/lab
+./run.sh
+```
 
-- [kind: node image documentation](https://kind.sigs.k8s.io/docs/user/quick-start/)
-- [Crossplane v2: composite resources](https://docs.crossplane.io/latest/concepts/composite-resources/)
-- [Helm chart template guide](https://helm.sh/docs/chart_template_guide/)
-- `reading/concepts.md` in this module: why Crossplane v2 removed claims, and what a
-  namespace boundary now does instead
+`run.sh` checks:
 
-##### Search Keywords
+- A real `kind` cluster comes up with the node image pinned by digest
+- Crossplane v2.4.0 installs and the composition function goes healthy
+- The warm-up XR goes `Ready` and its composed `ConfigMap` carries the real patched data
+- Layer 1's raw manifests produce a real, connectable Postgres
+- Layer 2's Helm-installed instance is a genuinely separate, queryable database
+- Layer 3's Crossplane XR goes `Synced` and `Ready`, and the composed Postgres is queryable
+- Teardown garbage-collects the composed resources and leaves no orphan cluster container
 
-- kind, node image digest, kindest/node
-- helm 4, helm install, helm chart, values.yaml, templates
-- crossplane v2, XRD, Composition, XR, namespaced composite resource
-- function-patch-and-transform, readinessChecks, string.type Format
-- ClusterRole, ClusterRoleBinding, composed resource RBAC
-- kubectl diff, reconcile loop, database-as-a-service
+## Summary
+
+What you built:
+
+- A real Postgres database, delivered three ways: raw manifests, a Helm chart, and a
+  namespaced Crossplane XR
+- Three real Crossplane failures, fixed for a specific reason each time, not by guessing: a
+  missing transform field, a missing RBAC grant, a readiness check that does not apply to a
+  `StatefulSet`
+- An agent proposing a second database request on its own, reading only the schema, with no
+  path to `kubectl`
+- A clean, numbered teardown, confirmed by a real `docker ps` check
+
+`kubectl diff` played the same role `terraform plan` has played since M01, read the change
+before it lands. M11 picks this same cluster back up and puts a GitOps controller in front of
+it, so an agent proposing a change goes through a pull request and a review before anything
+reaches this cluster at all.
