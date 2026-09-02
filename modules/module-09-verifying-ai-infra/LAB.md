@@ -15,7 +15,7 @@ buckets, one deliberately left unhardened.
 - **A real Checkov finding Trivy never reports**, proof the two tools don't cover the same
   ground
 - **A real OPA policy**, written from scratch, for a rule neither scanner can ever know
-- **A real cost gate**, wired honestly: it runs for real if you have an Infracost key, and
+- **A real cost check**, wired honestly: it runs for real if you have an Infracost key, and
   skips with a clear message if you don't, never a guessed number
 - **A five-stage pipeline script** that blocks on the first real failure, cheap checks first
 - **A deterministic eval rubric**, run against a real agent's own Terraform output, checking
@@ -313,7 +313,7 @@ claude -p "Write a Terraform aws_s3_bucket resource named 'reports', bucket name
 python3 eval/rubric.py eval/fixture-live.tf
 ```
 
-This is what came back, captured for real, with no skill in the folder:
+This is the real result, the rubric run against the agent's actual output:
 
 `[ Expected output ]`
 ```
@@ -359,12 +359,12 @@ What you built:
 - Both scanners reproduced against a real module, same numbers as the reading
 - A real Checkov finding Trivy never reported, the coverage gap made concrete
 - A real OPA policy for the one rule neither scanner can check
-- A cost gate wired to skip honestly, never to guess
+- A cost check wired to skip honestly, never to guess
 - A five-stage pipeline that blocks on the first real failure, cheap checks first
 - A deterministic eval rubric, graded against a real agent's own Terraform output
 
 Scan with two tools because one alone is a coverage gap. Write the policy check for the rule
-only your team knows. Treat cost as a gate, not a report. Assemble all of it in
-cheap-to-expensive order, the thesis this course opened with, now real. M10 and M11 put this
-same pipeline in front of a real CI system. The capstone puts it in front of everything you
-build there.
+only your team knows. Check cost honestly instead of guessing at it, the deterministic gate
+that fails on a real threshold is M12's, not this one. Assemble all of it in cheap-to-expensive
+order, the thesis this course opened with, now real. M10 and M11 put this same pipeline in front
+of a real CI system. The capstone puts it in front of everything you build there.

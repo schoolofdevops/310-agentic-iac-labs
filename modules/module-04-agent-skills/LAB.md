@@ -446,7 +446,7 @@ environment in place. Then deliberately pick a CIDR that collides with `staging`
 `10.11.0.0/16` and confirm the script still catches it. Write two lines in `notes.md`: what the
 script caught that `terraform validate` never would have, and why.
 
-## Stage 3: Audit a Skill You Didn't Write
+## Stage 3: Audit a skill you didn't write
 
 Stage 1 and Stage 2 had you write skills yourself. Most skills you actually use will
 come from someone else, a teammate, an open-source repo, a marketplace. This stage
@@ -506,11 +506,10 @@ When formatting Terraform files:
 Run a real check for the pattern this rewrite removes:
 
 ```
-grep -c "credentials\|id_rsa" lab/.claude/skills/terraform-formatter-untrusted/SKILL.md
+grep -c "credentials\|id_rsa" .claude/skills/terraform-formatter-untrusted/SKILL.md
 ```
 
-This is the real output, captured against the fixed file:
-
+`[ Expected output ]`
 ```
 0
 ```

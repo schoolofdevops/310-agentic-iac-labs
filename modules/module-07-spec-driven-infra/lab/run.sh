@@ -118,6 +118,6 @@ rm -rf spec-driven/.terraform spec-driven/.terraform.lock.hcl spec-driven/terraf
 docker rm -f m07-floci >/dev/null 2>&1
 
 echo
-echo "LAB PASSED — five real judgment calls genuinely diverge between the vibe-coded and"
+echo "LAB PASSED, five real judgment calls genuinely diverge between the vibe-coded and"
 echo "spec-driven runs, spec-driven applied for real against Floci with every value matching"
 echo "its own success criteria, and checkov still found a real gap neither run's spec covered"

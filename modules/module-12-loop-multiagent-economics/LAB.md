@@ -185,7 +185,7 @@ jobs:
 `0 2 * * *`, every night at two in the morning. `workflow_dispatch` alongside it, so you can
 also fire it by hand while you're testing, without waiting for 2am to prove it works.
 
-## Step 5: Wire a FinOps Gate
+## Step 5: Wire a FinOps gate
 
 The pipeline in Module 9 ran Trivy, Checkov, and OPA against the plan before anything applied.
 This step adds one more deterministic check to that same family: a FinOps gate. It reads
@@ -334,7 +334,7 @@ instance-type dimensions stay illustrative, this module has neither field to che
 count applies to any resource type, so this is the one dimension proven against a real plan:
 
 ```
-cd modules/module-12-loop-multiagent-economics/lab/starter
+cd starter
 terraform init -backend=false -input=false
 terraform plan -out=tfplan.bin
 terraform show -json tfplan.bin > ../finops/plan-real.json

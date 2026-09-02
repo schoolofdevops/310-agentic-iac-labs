@@ -408,7 +408,7 @@ docker rm -f floci
 Destroy complete! Resources: 3 destroyed.
 ```
 
-## Step 6: Apply the Spec-Driven Module With OpenTofu
+## Step 6: Apply the spec-driven module with OpenTofu
 
 Same HCL, different binary. This is what "one language, two runtimes" actually
 means: not a separate OpenTofu curriculum, one real proof that the module you just

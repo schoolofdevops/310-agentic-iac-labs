@@ -33,32 +33,7 @@ docker info
 
 ## Stage 1: Block a dangerous delete with a mechanical gate
 
-### Step 1: Write a Task Contract
-
-Before the starting infrastructure exists, before any agent touches this module,
-write down what it is and isn't allowed to do. **Copy** the template:
-
-```
-cp lab/task-contract-template.md lab/task-contract.md
-```
-
-**Fill it in** for the dangerous-delete scenario this stage builds: the agent will
-be asked to manage a real S3 bucket, including deletes, in a scratch AWS account
-emulated by Floci. Write the four fields for real, specific to this task, not
-generic boilerplate:
-
-- Allowed tools: name them exactly (`Read`, `Bash(terraform plan)`, `Bash(terraform
-  apply)`, whatever this stage's later steps actually grant)
-- Forbidden actions: name the one this stage is about, deleting a bucket that
-  still holds data, in plain words
-- Required evidence: what proof would actually convince you the delete was safe
-- Stop condition: what makes this task done
-
-Keep this file open. Later in this stage, after the mechanical gate blocks a real
-delete, come back to it and mark which of your four fields the gate actually
-enforced, versus which ones only ever existed on this piece of paper.
-
-### Step 2: Set up the starting infrastructure
+### Step 1: Set up the starting infrastructure
 
 `file: lab/module/main.tf`
 ```
@@ -121,6 +96,31 @@ Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
 ```
 
 Two real buckets, in a real backend container, same as M04.
+
+### Step 2: Write a task contract
+
+Before any agent touches this module, before the dangerous delete happens in the next step,
+write down what it is and isn't allowed to do. **Copy** the template:
+
+```
+cp task-contract-template.md task-contract.md
+```
+
+**Fill it in** for the dangerous-delete scenario this stage builds: the agent will
+be asked to manage a real S3 bucket, including deletes, in a scratch AWS account
+emulated by Floci. Write the four fields for real, specific to this task, not
+generic boilerplate:
+
+- Allowed tools: name them exactly (`Read`, `Bash(terraform plan)`, `Bash(terraform
+  apply)`, whatever this stage's later steps actually grant)
+- Forbidden actions: name the one this stage is about, deleting a bucket that
+  still holds data, in plain words
+- Required evidence: what proof would actually convince you the delete was safe
+- Stop condition: what makes this task done
+
+Keep this file open. Later in this stage, after the mechanical gate blocks a real
+delete, come back to it and mark which of your four fields the gate actually
+enforced, versus which ones only ever existed on this piece of paper.
 
 ### Step 3: Watch an ungated delete destroy real data
 
@@ -255,7 +255,7 @@ log line, destroyed for good in run 1, still there in run 2.
 
 **Restore** the `logs` block once more before continuing.
 
-**Reread** `lab/task-contract.md`. The mechanical gate you just watched work
+**Reread** `task-contract.md`. The mechanical gate you just watched work
 enforced exactly one of your four fields, mechanically, whether or not anyone
 reads the contract again. Write one line in `notes.md`: which of the other three
 fields (allowed tools, required evidence, stop condition) has no mechanical
