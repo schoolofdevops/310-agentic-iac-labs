@@ -129,6 +129,16 @@ for env in dev staging prod; do
 done
 
 echo
-echo "LAB PASSED — Part I: starter fails the secrets scan, solution is clean, applies and destroys cleanly on floci ${FLOCI_VERSION}."
+echo "==> Stage 3: skill audit"
+grep -c "credentials\|id_rsa" .claude/skills/terraform-formatter-untrusted/SKILL.md > /tmp/m04-audit-count.txt
+if [ "$(cat /tmp/m04-audit-count.txt)" != "0" ]; then
+  echo "FAIL: terraform-formatter-untrusted/SKILL.md still grants credential access"
+  exit 1
+fi
+echo "skill audit: PASS"
+
+echo
+echo "LAB PASSED, Part I: starter fails the secrets scan, solution is clean, applies and destroys cleanly on floci ${FLOCI_VERSION}."
 echo "             Part II: dev/staging/prod all validate, the skill's bundled overlap checker passes clean and catches a real"
 echo "             seeded collision, and dev's 12-resource VPC applies and destroys cleanly on floci ${FLOCI_VERSION}."
+echo "             Stage 3: terraform-formatter-untrusted/SKILL.md carries no credential read."
