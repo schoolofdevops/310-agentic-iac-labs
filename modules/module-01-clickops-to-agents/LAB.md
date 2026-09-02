@@ -3,11 +3,16 @@
 **Tier 0** · ~12 min · no agent, no cloud account, no `terraform apply`. Just Terraform and
 Checkov, both already in the devcontainer.
 
-Before you ever type a prompt at an agent, run its loop yourself. You're going to write a small
-Terraform module against a one-line intent, the kind of thing you'd hand an agent later in this
-course, then push it through the same generate-verify-fix cycle a machine would run. Feel the
-shape of it as a human now, and when M02 hands the same loop to an agent, you'll recognize every
-step it skips or gets wrong.
+**What you're building:** a small, real piece of infrastructure: an nginx web container
+serving one static page you control, with its rendered HTML kept on disk and a log-shipping
+credential handled the right way instead of hardcoded. Small on purpose. The point of this lab
+isn't the infrastructure, it's the loop you run against it.
+
+Before you ever type a prompt at an agent, run its loop yourself. You're going to write that
+module against a one-line intent, the kind of thing you'd hand an agent later in this course,
+then push it through the same generate-verify-fix cycle a machine would run. Feel the shape of
+it as a human now, and when M02 hands the same loop to an agent, you'll recognize every step it
+skips or gets wrong.
 
 ## Pre Requisites
 
