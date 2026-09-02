@@ -92,7 +92,7 @@ like, that's what makes the comparison in this project meaningful:
 > rendered HTML kept on disk so I can diff it in git. No secrets in the container. I don't
 > need it exposed outside this machine.
 
-## Step 1: Ask for a suggestion, no files written
+## Step 1: Suggest Mode
 
 **Open** `claude` and ask it the intent above, plainly, the way you would in any real session.
 If it reaches for a tool to write a file, **deny** it right there at the permission prompt,
@@ -277,7 +277,7 @@ that referenced `path.module` where Terraform doesn't allow it, and a relative p
 rejects at plan time. `terraform validate` caught the first, on its own it can't see the second,
 only `terraform plan` did. Both were yours to have caught either way.
 
-## Step 2: Let the agent draft the file directly
+## Step 2: Draft Mode
 
 Same project, same intent, more trust. **Open** a fresh `claude` session in a new directory, same intent, and this time when the
 permission prompt appears asking to write `main.tf`, **approve** it. That's the whole
@@ -366,7 +366,7 @@ actual lesson of step 2, sharper than the version of it you'd have gotten by sto
 `validate`. Read every line anyway, every time, and run `plan`, every time, that's the whole
 lesson.
 
-## Step 3: Preview plan mode on a throwaway file
+## Step 3: Plan Mode
 
 A third posture, on a throwaway file, not the project itself. Step 2 let the agent write a
 file straight away. There's a real middle setting between "just talk" and "just write."
@@ -534,7 +534,7 @@ Exit code: 0
 Same gap from M01: no secrets, and neither `docker_container` nor `local_file` has built-in
 Checkov coverage, so a clean exit here means "found nothing to flag," not "audited and safe."
 
-## Step 4: Extend the module under `acceptEdits`
+## Step 4: acceptEdits Mode
 
 Back to the real project, now grown, not rebuilt: this step takes step 2's fixed module and
 extends it. Step 2 approved one file write, once. `acceptEdits` mode keeps every future edit
@@ -619,7 +619,7 @@ Whatever you see, write it in this step's line of your exercise notes below, a r
 a predicted one. This is exactly the gap `acceptEdits` leaves open: it removes the per-edit
 prompt, it does not remove the need to actually run the thing.
 
-## Step 5: Delegate a bounded audit to a subagent
+## Step 5: Subagent Delegation
 
 Auditing the project you just built, not adding to it. Not everything you'd check is worth
 doing inline. A subagent runs in its own isolated context,
@@ -664,7 +664,7 @@ the parent session, and instead of guessing at an answer it said so and told you
 yourself. A subagent inherits an isolated, narrower surface, not a blank check on your
 permissions. That is by design, and module 6 turns it into a formal gate.
 
-## Step 6: Turn the check floor into a slash command
+## Step 6: Custom Slash Command
 
 One last thing the project's own repo can carry: its own check floor, as a command anyone
 opening it can run. You've now typed `fmt`, `init`, `validate`, `plan` by hand four times in
