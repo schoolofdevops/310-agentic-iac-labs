@@ -3,13 +3,17 @@
 **Tier 1** · ~40 min · Docker required. Real `terraform apply` against Floci, no cloud
 account. A later part opens a real, throwaway pull request on your own repository.
 
-Module 4 gave your agent a skill it reaches for on its own. This lab gives it something
-different: a live connection to real systems. You'll ask the same question twice, once
-without that connection and once with it, then use a live connection to build something
-real, an RDS instance with a non-default parameter group, the kind of resource whose exact
-argument shape you'd normally have to look up by hand. Along the way you'll also try a
-second, AWS-specific MCP server, and find out live that "official" and "works today" are
-not the same claim, a real lesson, not a hypothetical one.
+**The project:** a real RDS database, tuned with a non-default parameter group, the kind of
+resource whose exact argument shape you'd normally have to look up by hand. You'll build it
+using a live connection to real systems, not a memorized guess. Module 4 gave your agent a
+skill it reaches for on its own. This lab gives it something different: MCP, a live tool
+connection. You'll ask the same question twice, once without that connection and once with
+it, then use the connection to build the database for real, applied and destroyed against
+Floci. Along the way you'll also try a second, AWS-specific MCP server, and find out live
+that "official" and "works today" are not the same claim, a real lesson, not a hypothetical
+one. Last, you'll watch the agent open a real pull request through a third MCP server,
+proving the same human-approval boundary from module 1 holds even when the agent is talking
+to a live API, not just a diagram.
 
 ## Pre Requisites
 
@@ -21,7 +25,7 @@ not the same claim, a real lesson, not a hypothetical one.
   ../../../labs/shared/docker-compose.floci.yml up -d`, then confirm with `curl
   http://localhost:4566/_floci/health`
 
-## Configure the Terraform MCP server
+## Stage 1: connect the tool the project needs first
 
 HashiCorp ships the official Terraform MCP server as a Docker image, not an npm package.
 **Pull** it first:
@@ -62,7 +66,7 @@ terraform:
   Args: run --rm -i hashicorp/terraform-mcp-server:latest stdio
 ```
 
-## Ask the same question twice
+## Stage 2: prove you actually need it
 
 Here's the one-line intent: "What's the latest version of the kreuzwerker/docker Terraform
 provider, and what arguments does its `healthcheck` block accept?"
@@ -86,7 +90,7 @@ claude -p "Using the terraform MCP tools available to you, look up the exact lat
 `file: lab/evidence/mcp-answer.txt` has the real captured answer, including which MCP tool
 the agent actually called. Diff the two. The gap between them is the whole lesson.
 
-## Build the real thing: RDS with a non-default parameter group
+## Stage 3: build the project, RDS with a non-default parameter group
 
 A stale-vs-live lookup proves the point. Building something proves you can use it. `aws_db_parameter_group`
 is a good resource to learn this on: most learners have never written one by hand, so there's
@@ -150,7 +154,7 @@ instance never picked it up, a real, easy-to-miss mistake with this resource pai
 terraform destroy -auto-approve
 ```
 
-## The other AWS MCP server: a real, live disappointment
+## Stage 4: a second tool for the same project, a real, live disappointment
 
 This course's own conventions name `aws-iac-mcp-server` as the modern, AWS-endorsed
 replacement for the deprecated `awslabs/terraform-mcp-server`. Try it:
@@ -176,7 +180,7 @@ never Terraform HCL, even once it's running. Verify a server actually connects a
 covers your tool before you plan a workflow around it, the same caution this course already
 gives Floci itself as a still-maturing project.
 
-## Configure the GitHub MCP server
+## Stage 5: connect a third tool, to ship the project safely
 
 **Register** the official, hosted GitHub MCP server, using a `gh` token you already have:
 
@@ -187,7 +191,7 @@ claude mcp add --transport http github https://api.githubcopilot.com/mcp/ --head
 `file: lab/mcp-config/github.mcp.json` is the same config as a file, `$GITHUB_TOKEN`
 substituted from your environment instead of inline.
 
-## Open a real pull request, then close it
+## Stage 6: ship it, then hand the merge decision to a human
 
 **Create** a throwaway branch with one small, harmless change:
 
@@ -228,13 +232,13 @@ it?
 
 ## Summary
 
-You asked the same question twice and watched a guess turn into a real, sourced answer.
-You built a real resource, an RDS instance with a non-default parameter group, using a live
-lookup instead of a memorized shape, and verified the wiring yourself rather than trusting
-that it worked. You tried a second AWS MCP server and watched it fail to start, a real
+The project is done: a real RDS database, tuned with a non-default parameter group, applied
+and verified and destroyed, built through a live tool connection instead of a memorized
+guess. Along the way, you asked the same question twice and watched a guess turn into a
+real, sourced answer. You tried a second AWS MCP server and watched it fail to start, a real
 reminder that "official" is not "ready." You watched an agent open a real pull request
-through a real protocol, and watched a human, not the agent, decide whether it merged. MCP
-adds reach. Module 6 is where you build the gate that MCP servers themselves need to
+through a third MCP server, and watched a human, not the agent, decide whether it merged.
+MCP adds reach. Module 6 is where you build the gate that MCP servers themselves need to
 respect, the same permission-boundary caution already flagged in this chapter's reading.
 
 ##### Reading List
