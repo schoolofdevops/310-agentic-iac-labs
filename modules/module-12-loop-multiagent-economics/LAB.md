@@ -16,6 +16,8 @@ human watching it.
 - Three real runs against the same working copy, three different outcomes: continue-and-fix,
   stop, stay stopped
 - A real GitHub Actions `schedule:` trigger, exactly what you'd commit to a real repo
+- A FinOps gate that checks resource count, tags, and instance type straight from
+  `terraform show -json`, no Infracost API key required
 
 ## Pre Requisites
 
@@ -183,6 +185,174 @@ jobs:
 `0 2 * * *`, every night at two in the morning. `workflow_dispatch` alongside it, so you can
 also fire it by hand while you're testing, without waiting for 2am to prove it works.
 
+## Step 5: Wire a FinOps Gate
+
+The pipeline in Module 9 ran Trivy, Checkov, and OPA against the plan before anything applied.
+This step adds one more deterministic check to that same family: a FinOps gate. It reads
+`terraform show -json` directly and fails on three things: too many resources, missing required
+tags, and an instance type outside an allowed list. No Infracost API key, no account, no live
+pricing lookup. It checks policy against a plan you already have on disk, not cost.
+
+`file: lab/finops/gate.py`
+```
+#!/usr/bin/env python3
+"""FinOps gate: fails on resource-count, tag, or instance-type violations, read
+straight from `terraform show -json`. No Infracost API key required, this checks
+policy, not live pricing."""
+import json
+import sys
+
+MAX_RESOURCES = 10
+REQUIRED_TAGS = ["Environment", "Owner", "ManagedBy"]
+ALLOWED_INSTANCE_TYPES = {"t3.micro", "t3.small", "t3.medium"}
+
+
+def check(plan_path):
+    plan = json.load(open(plan_path, encoding="utf-8"))
+    resources = plan.get("planned_values", {}).get("root_module", {}).get("resources", [])
+    violations = []
+    if len(resources) > MAX_RESOURCES:
+        violations.append(f"resource count {len(resources)} exceeds max {MAX_RESOURCES}")
+    for r in resources:
+        values = r.get("values", {}) or {}
+        # Tag and instance-type checks only apply to resource types that carry
+        # those fields at all. A local_file or null_resource has neither, and
+        # is not a FinOps violation for lacking them.
+        if "tags" in values:
+            tags = values.get("tags") or {}
+            missing = [t for t in REQUIRED_TAGS if t not in tags]
+            if missing:
+                violations.append(f"{r['address']}: missing tags {missing}")
+        instance_type = values.get("instance_type")
+        if instance_type and instance_type not in ALLOWED_INSTANCE_TYPES:
+            violations.append(
+                f"{r['address']}: instance_type {instance_type} not in {sorted(ALLOWED_INSTANCE_TYPES)}"
+            )
+    return violations
+
+
+if __name__ == "__main__":
+    violations = check(sys.argv[1])
+    if violations:
+        print("FINOPS GATE FAILED:")
+        for v in violations:
+            print(" -", v)
+        sys.exit(1)
+    print(f"FinOps gate passed: {sys.argv[1]} within policy.")
+    sys.exit(0)
+```
+
+This module's own starter is Tier 0, `local_file` only, no `tags`, no `instance_type`. Proving
+the tag and instance-type dimensions needs a resource type that actually carries those fields, so
+those two dimensions run here against two illustrative fixtures, each a real
+`terraform show -json` plan for `aws_instance` resources.
+
+`file: lab/finops/plan-over-budget.json`
+```json
+{
+  "planned_values": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_instance.worker[0]",
+          "type": "aws_instance",
+          "values": {
+            "instance_type": "m5.24xlarge",
+            "tags": {"Environment": "lab"}
+          }
+        },
+        {
+          "address": "aws_instance.worker[1]",
+          "type": "aws_instance",
+          "values": {
+            "instance_type": "t3.micro",
+            "tags": {"Environment": "lab", "Owner": "m12-lab", "ManagedBy": "loop-agent"}
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+`worker[0]` seeds two real violations: an instance type outside the allowed set, and missing
+`Owner`/`ManagedBy` tags. Run the gate against it:
+
+```
+cd modules/module-12-loop-multiagent-economics/lab
+python3 finops/gate.py finops/plan-over-budget.json
+```
+
+`[ Expected output ]`
+```
+FINOPS GATE FAILED:
+ - aws_instance.worker[0]: missing tags ['Owner', 'ManagedBy']
+ - aws_instance.worker[0]: instance_type m5.24xlarge not in ['t3.medium', 't3.micro', 't3.small']
+```
+
+Exit code 1, both violations printed, both true. Now the fixed fixture:
+
+`file: lab/finops/plan-in-budget.json`
+```json
+{
+  "planned_values": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "aws_instance.worker[0]",
+          "type": "aws_instance",
+          "values": {
+            "instance_type": "t3.small",
+            "tags": {"Environment": "lab", "Owner": "m12-lab", "ManagedBy": "loop-agent"}
+          }
+        },
+        {
+          "address": "aws_instance.worker[1]",
+          "type": "aws_instance",
+          "values": {
+            "instance_type": "t3.micro",
+            "tags": {"Environment": "lab", "Owner": "m12-lab", "ManagedBy": "loop-agent"}
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+```
+python3 finops/gate.py finops/plan-in-budget.json
+```
+
+`[ Expected output ]`
+```
+FinOps gate passed: finops/plan-in-budget.json within policy.
+```
+
+Now run the resource-count dimension for real, against this module's own real plan. The tag and
+instance-type dimensions stay illustrative, this module has neither field to check, but resource
+count applies to any resource type, so this is the one dimension proven against a real plan:
+
+```
+cd modules/module-12-loop-multiagent-economics/lab/starter
+terraform init -backend=false -input=false
+terraform plan -out=tfplan.bin
+terraform show -json tfplan.bin > ../finops/plan-real.json
+cd ..
+python3 finops/gate.py finops/plan-real.json
+```
+
+`[ Expected output ]`
+```
+FinOps gate passed: finops/plan-real.json within policy.
+```
+
+Real result, captured for real: `terraform plan` here shows `Plan: 1 to add, 0 to change, 0 to
+destroy`, one `local_file.log_shipper_env` resource, well under `MAX_RESOURCES`. That resource
+has no `tags`/`instance_type` fields, so the other two dimensions have nothing to flag. That's
+expected and correct, not a gap in the gate. Those two dimensions were already proven against the
+fixtures above.
+
 #### Exercise
 
 Write the two-line escalation note this module's reading asked for:
@@ -197,7 +367,7 @@ answer from Project 01's exercise.
 
 ## Validation
 
-Run the full check yourself, all three outcomes, plus the trigger config itself:
+Run the full check yourself, all three loop outcomes, the trigger config, and the FinOps gate:
 
 ```
 cd modules/module-12-loop-multiagent-economics/lab
@@ -210,6 +380,7 @@ cd modules/module-12-loop-multiagent-economics/lab
 - Run 1 prints `CONTINUE` and applies the real fix
 - Run 2, same working copy, prints `STOPPED`
 - Run 3, same working copy again, is still `STOPPED`, proving the loop is idempotent
+- The FinOps gate rejects `plan-over-budget.json` and accepts `plan-in-budget.json`
 
 ## Summary
 
@@ -219,6 +390,8 @@ What you built:
 - A real fix, applied automatically, not by hand
 - Three real runs proving three states: continue-and-fix, stop, stay stopped
 - A real GitHub Actions `schedule:` trigger, ready to commit to a real repo
+- A FinOps gate that fails a plan on resource count, missing tags, or a disallowed instance
+  type, checked against fixtures and against this project's own real plan, no paid API
 
 That's the loop layer, the third one from Module 1, closed. Every earlier module built context
 or harness. This project is the one that finally runs one of them on its own, on a schedule,

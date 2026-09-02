@@ -32,5 +32,10 @@ echo "    ok"
 
 rm -rf solution/work
 
+echo "==> Step 5: FinOps gate"
+python3 finops/gate.py finops/plan-over-budget.json && fail "gate should have rejected plan-over-budget.json"
+python3 finops/gate.py finops/plan-in-budget.json || fail "gate should have accepted plan-in-budget.json"
+echo "FinOps gate: PASS"
+
 echo
-echo "LAB PASSED -- real stopping-condition loop: run 1 continues and applies the real fix, run 2 stops, run 3 is idempotent"
+echo "LAB PASSED -- real stopping-condition loop: run 1 continues and applies the real fix, run 2 stops, run 3 is idempotent, FinOps gate rejects and accepts correctly"
