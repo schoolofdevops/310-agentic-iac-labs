@@ -426,10 +426,18 @@ OpenTofu v1.12.2
 on darwin_arm64
 ```
 
-**Apply** the exact same spec-driven module, no changes to the `.tf` files:
+Step 5 tore Floci down at the end, so **start** it again the same way:
 
 ```
-cd spec-driven
+docker run -d --name floci -p 4566:4566 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  floci/floci:1.7.0
+```
+
+You're still in `lab/spec-driven` from Step 5. **Apply** the exact same spec-driven
+module, no changes to the `.tf` files:
+
+```
 tofu init -backend=false -input=false
 tofu apply -auto-approve
 ```
@@ -461,6 +469,7 @@ Same resource count as the `terraform apply` run in Step 5. **Destroy** it:
 
 ```
 tofu destroy -auto-approve
+docker rm -f floci
 ```
 
 `[ Expected output ]`
