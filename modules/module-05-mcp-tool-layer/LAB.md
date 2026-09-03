@@ -163,8 +163,6 @@ print('parameter group name:            ', res['aws_db_parameter_group.app']['va
 Both lines should print the same name. If they don't, the parameter group exists but the
 instance never picked it up, an easy mistake to miss with this resource pair.
 
-### Step 1: Catch a Real Encryption Gap
-
 Wiring the parameter group correctly is not the only thing worth checking before you'd ship
 this module. Module 1 used Checkov to catch a hardcoded secret. This module has zero Checkov
 usage anywhere so far, and `aws_db_instance` gives you a different kind of misconfiguration

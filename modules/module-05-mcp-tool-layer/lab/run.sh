@@ -60,7 +60,8 @@ echo "    ok, this module doesn't paper over an immature dependency, it shows yo
 
 echo "==> checkov: a seeded storage_encrypted=false must fail CKV_AWS_16, the fixed module must pass"
 rm -rf /tmp/m05-checkov-scratch
-cp -r module /tmp/m05-checkov-scratch
+mkdir -p /tmp/m05-checkov-scratch
+cp module/*.tf /tmp/m05-checkov-scratch/
 sed -i.bak 's/storage_encrypted       = true/storage_encrypted       = false/' /tmp/m05-checkov-scratch/db.tf
 grep -q "storage_encrypted       = false" /tmp/m05-checkov-scratch/db.tf || fail "seed did not take, db.tf still has storage_encrypted = true"
 checkov -d /tmp/m05-checkov-scratch --framework terraform --check CKV_AWS_16 --compact --quiet >/tmp/m05-checkov-seeded.log 2>&1

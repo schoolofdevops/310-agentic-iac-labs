@@ -520,7 +520,7 @@ cd modules/module-07-spec-driven-infra/lab
   and fails both `CKV_AWS_79` and an ALB/TLS finding on vibe-coded
 - `spec.md` carries all three real parts: requirements, constraints, and success criteria
 - A real `terraform apply` and `destroy` of the spec-driven module against Floci, with the applied
-  state checked against every success criterion
+  state checked against SC-001 through SC-004, and SC-005/SC-006 verified separately by checkov
 
 ## Summary
 

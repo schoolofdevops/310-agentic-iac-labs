@@ -81,7 +81,7 @@ grep -q "^### Constraints" spec-driven/spec.md || fail "spec.md missing Constrai
 grep -q "^## Success Criteria" spec-driven/spec.md || fail "spec.md missing Success Criteria"
 echo "    ok"
 
-echo "==> real apply + destroy of the spec-driven module against Floci, values checked against SC-001..SC-005"
+echo "==> real apply + destroy of the spec-driven module against Floci, values checked against SC-001..SC-004"
 terraform -chdir=spec-driven apply -auto-approve -input=false >/tmp/m07-apply.log 2>&1 || fail "spec-driven apply: $(tail -20 /tmp/m07-apply.log)"
 terraform -chdir=spec-driven state show aws_autoscaling_group.checkout_web > /tmp/m07-state.log 2>&1
 python3 -c "
@@ -97,11 +97,11 @@ for k, w in want.items():
         print(f'applied state {k}: expected {w}, got {got}'); sys.exit(1)
 if 'OldestLaunchTemplate' not in t:
     print('applied state missing termination_policies'); sys.exit(1)
-print('    ok, real applied state matches every SC value')
+print('    ok, real applied state matches SC-001 through SC-004')
 " || fail "applied state didn't match spec"
 terraform -chdir=spec-driven destroy -auto-approve -input=false >/tmp/m07-destroy.log 2>&1 || fail "spec-driven destroy: $(tail -20 /tmp/m07-destroy.log)"
 grep -q "Destroy complete" /tmp/m07-destroy.log || fail "destroy didn't complete cleanly"
-echo "    ok, applied for real, values matched every success criterion, destroyed cleanly"
+echo "    ok, applied for real, values matched SC-001 through SC-004, destroyed cleanly"
 
 rm -rf spec-driven/.terraform spec-driven/.terraform.lock.hcl spec-driven/terraform.tfstate*
 

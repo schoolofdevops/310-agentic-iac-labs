@@ -87,14 +87,28 @@ echo "==> 9. seeded failure 1 of 3: missing transform field must reproduce the r
 python3 - <<'PY'
 p = "solution/db-composition.yaml"
 out = "/tmp/m10-seed-transform.yaml"
-lines = open(p).readlines()
-for i, line in enumerate(lines):
-    if line.strip() == "type: Format":
-        del lines[i]
-        break
-else:
-    raise SystemExit("no 'type: Format' line found in db-composition.yaml")
-open(out, "w").writelines(lines)
+text = open(p).read()
+old = """              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-postgres-creds"
+"""
+new = """              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      fmt: "%s-postgres-creds"
+"""
+count = text.count(old)
+if count != 1:
+    raise SystemExit(f"expected exactly one db-secret metadata.name Format transform block, found {count}")
+open(out, "w").write(text.replace(old, new))
 PY
 [ -f /tmp/m10-seed-transform.yaml ] || fail "could not generate seeded transform-field composition"
 kubectl --context "kind-$CLUSTER_NAME" apply -f /tmp/m10-seed-transform.yaml >/dev/null || fail "seeded transform-field composition apply"

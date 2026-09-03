@@ -6,7 +6,7 @@
 In this project, you will build the pipeline that decides whether a real Terraform module is
 safe to apply, the same sentence you have carried since module one: the agent proposes, the
 pipeline decides. The module itself is already written: a reports-and-backups S3 service, two
-buckets, one deliberately left unhardened.
+buckets, both deliberately left unhardened.
 
 **What you're building, at a glance:**
 

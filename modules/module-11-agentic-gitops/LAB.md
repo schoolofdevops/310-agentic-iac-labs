@@ -168,8 +168,8 @@ request did the reviewing, automatically, and it failed for a real reason: the s
 
 ### Step 1: Ask a second agent to fix the real cause
 
-**Ask** a second, separate agent session to fix it, using nothing but the real CI output as
-context:
+**Ask** a second, separate agent session to fix it, prompted with the real CI failure text plus
+the pre-diagnosed cause and prescribed fix:
 
 ```
 claude -p "You are on git branch m11-agent-proposed-demo, PR
