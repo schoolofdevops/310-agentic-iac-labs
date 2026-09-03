@@ -170,11 +170,12 @@ this module. Module 1 used Checkov to catch a hardcoded secret. This module has 
 usage anywhere so far, and `aws_db_instance` gives you a different kind of misconfiguration
 to catch, one attribute controlling whether the database is encrypted at rest.
 
-**Copy** the module into a scratch directory and seed the same mistake a rushed edit makes,
-turn storage encryption off:
+**Copy** the module's `.tf` files into a scratch directory and seed the same mistake a rushed
+edit makes, turn storage encryption off. You're still in `lab/module` from the apply above:
 
 ```
-cp -r lab/module ~/m05-scratch
+mkdir -p ~/m05-scratch
+cp *.tf ~/m05-scratch/
 cd ~/m05-scratch
 ```
 
@@ -227,6 +228,13 @@ Passed checks: 1, Failed checks: 0, Skipped checks: 0
 
 `Exit code 0`. `lab/module/db.tf` already ships with `storage_encrypted = true`, that one
 attribute is why the apply above passed the same check and the destroy below is clean.
+
+**Return** to `lab/module`, the scratch copy was never applied, the real database is still
+running where you left it:
+
+```
+cd -
+```
 
 **Destroy** it, this is a project, not a running database:
 
