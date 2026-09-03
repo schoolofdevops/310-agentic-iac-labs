@@ -142,13 +142,21 @@ for i in $(seq 1 15); do
 done
 [ "$FOUND" = "1" ] || fail "seeded missing-RBAC-grant bug did not reproduce a statefulsets/forbidden error"
 echo "    ok, reproduced: crossplane ServiceAccount forbidden from patching statefulsets, no db-composer-rbac.yaml applied"
-kubectl --context "kind-$CLUSTER_NAME" delete xdatabase seed-rbac-test -n default >/dev/null 2>&1
+# Keep seed-rbac-test alive here, don't delete it before applying the fix: the point of this
+# half of the check is confirming the same stuck XR actually recovers once the RBAC grant
+# lands, not just that db-composer-rbac.yaml applies without error.
 kubectl --context "kind-$CLUSTER_NAME" apply -f solution/db-composer-rbac.yaml >/dev/null || fail "db-composer-rbac apply (real fix)"
+UNBLOCKED=0
 for i in $(seq 1 20); do
-  kubectl --context "kind-$CLUSTER_NAME" -n default get statefulset seed-rbac-test-postgres >/dev/null 2>&1 && break
-  sleep 2
+  LINE=$(kubectl --context "kind-$CLUSTER_NAME" get xdatabase seed-rbac-test -n default --no-headers 2>/dev/null)
+  SYNCED=$(echo "$LINE" | awk '{print $2}')
+  READY=$(echo "$LINE" | awk '{print $3}')
+  [ "$SYNCED" = "True" ] && [ "$READY" = "True" ] && { UNBLOCKED=1; break; }
+  sleep 3
 done
-echo "    ok, db-composer-rbac.yaml applied, StatefulSet composition now unblocked"
+[ "$UNBLOCKED" = "1" ] || fail "db-composer-rbac.yaml applied but seed-rbac-test never recovered to Synced+Ready"
+kubectl --context "kind-$CLUSTER_NAME" delete xdatabase seed-rbac-test -n default >/dev/null 2>&1
+echo "    ok, db-composer-rbac.yaml applied, seed-rbac-test recovered to Synced+Ready for real"
 
 echo "==> 11. seeded failure 3 of 3: StatefulSet-incompatible readiness check must reproduce the real error"
 python3 - <<'PY'
