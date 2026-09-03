@@ -668,6 +668,9 @@ cd modules/module-10-agentic-kubernetes/lab
 - The warm-up XR goes `Ready` and its composed `ConfigMap` carries the real patched data
 - Layer 1's raw manifests produce a real, connectable Postgres
 - Layer 2's Helm-installed instance is a genuinely separate, queryable database
+- Each of the 3 real bugs above is regression-tested for real, not just narrated: a scratch
+  copy of the Composition with that specific fix reverted is applied, the exact documented
+  error is confirmed to reproduce, then the shipped, fixed Composition is restored
 - Layer 3's Crossplane XR goes `Synced` and `Ready`, and the composed Postgres is queryable
 - Teardown garbage-collects the composed resources and leaves no orphan cluster container
 

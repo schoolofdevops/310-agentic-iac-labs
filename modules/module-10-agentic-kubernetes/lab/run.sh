@@ -69,10 +69,137 @@ helm install billing-db ./charts/postgres-db --kube-context "kind-$CLUSTER_NAME"
 kubectl --context "kind-$CLUSTER_NAME" -n dbaas-helm exec billing-db-postgres-0 -- psql -U appuser -d billing_service -c "SELECT 1;" >/dev/null || fail "helm-installed postgres not queryable"
 echo "    ok, helm-installed instance real and queryable"
 
-echo "==> 8. layer three: request a database as one namespaced XR, no Helm values, no claim"
+echo "==> 8. layer three: schema for a namespaced database request"
 kubectl --context "kind-$CLUSTER_NAME" apply -f solution/db-xrd.yaml >/dev/null || fail "db-xrd apply"
 sleep 2
 kubectl --context "kind-$CLUSTER_NAME" get xrd xdatabases.platform.m10.example.org -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' | grep -q True || fail "db-xrd not established"
+echo "    ok"
+
+# The next three checks each seed one of the three real Crossplane bugs this module's LAB.md
+# narrates, hit and fixed for real while this lab was being built: a missing transform field, a
+# missing RBAC grant, and a readiness check that does not apply to a StatefulSet. Each check
+# applies a scratch, deliberately-broken copy of the shipped composition, confirms the exact
+# real failure this course documents actually reproduces, then restores the shipped, fixed
+# state before moving on. Without these, the earlier version of this script only ever applied
+# the final, already-fixed composition, so none of the 3 fixes were load-bearing.
+
+echo "==> 9. seeded failure 1 of 3: missing transform field must reproduce the real error"
+python3 - <<'PY'
+p = "solution/db-composition.yaml"
+out = "/tmp/m10-seed-transform.yaml"
+lines = open(p).readlines()
+for i, line in enumerate(lines):
+    if line.strip() == "type: Format":
+        del lines[i]
+        break
+else:
+    raise SystemExit("no 'type: Format' line found in db-composition.yaml")
+open(out, "w").writelines(lines)
+PY
+[ -f /tmp/m10-seed-transform.yaml ] || fail "could not generate seeded transform-field composition"
+kubectl --context "kind-$CLUSTER_NAME" apply -f /tmp/m10-seed-transform.yaml >/dev/null || fail "seeded transform-field composition apply"
+kubectl --context "kind-$CLUSTER_NAME" apply -f - >/dev/null <<'EOF' || fail "seed-transform-test xr apply"
+apiVersion: platform.m10.example.org/v1alpha1
+kind: XDatabase
+metadata:
+  name: seed-transform-test
+  namespace: default
+spec:
+  dbName: seed_transform_test
+  storageSize: 512Mi
+EOF
+FOUND=0
+for i in $(seq 1 20); do
+  # -o json, not -o yaml: yaml output word-wraps long condition messages and
+  # splits the exact substring we're checking for across two lines.
+  TEXT=$(kubectl --context "kind-$CLUSTER_NAME" get xdatabase seed-transform-test -n default -o json 2>/dev/null)
+  echo "$TEXT" | grep -q "string.type: Required value" && { FOUND=1; break; }
+  sleep 3
+done
+[ "$FOUND" = "1" ] || fail "seeded missing-transform-field bug did not reproduce 'string.type: Required value'"
+echo "    ok, reproduced: invalid Function input, resources[0].patches[1].transforms[0].string.type: Required value"
+kubectl --context "kind-$CLUSTER_NAME" delete xdatabase seed-transform-test -n default >/dev/null 2>&1
+kubectl --context "kind-$CLUSTER_NAME" apply -f solution/db-composition.yaml >/dev/null || fail "restore shipped composition after seed 1"
+rm -f /tmp/m10-seed-transform.yaml
+echo "    ok, shipped composition (transform field present) restored"
+
+echo "==> 10. seeded failure 2 of 3: missing RBAC grant must reproduce the real error"
+kubectl --context "kind-$CLUSTER_NAME" apply -f - >/dev/null <<'EOF' || fail "seed-rbac-test xr apply"
+apiVersion: platform.m10.example.org/v1alpha1
+kind: XDatabase
+metadata:
+  name: seed-rbac-test
+  namespace: default
+spec:
+  dbName: seed_rbac_test
+  storageSize: 512Mi
+EOF
+FOUND=0
+for i in $(seq 1 15); do
+  TEXT=$(kubectl --context "kind-$CLUSTER_NAME" get events -n default --field-selector involvedObject.name=seed-rbac-test 2>/dev/null)
+  echo "$TEXT" | grep -q "statefulsets" && echo "$TEXT" | grep -q "forbidden" && { FOUND=1; break; }
+  sleep 3
+done
+[ "$FOUND" = "1" ] || fail "seeded missing-RBAC-grant bug did not reproduce a statefulsets/forbidden error"
+echo "    ok, reproduced: crossplane ServiceAccount forbidden from patching statefulsets, no db-composer-rbac.yaml applied"
+kubectl --context "kind-$CLUSTER_NAME" delete xdatabase seed-rbac-test -n default >/dev/null 2>&1
+kubectl --context "kind-$CLUSTER_NAME" apply -f solution/db-composer-rbac.yaml >/dev/null || fail "db-composer-rbac apply (real fix)"
+for i in $(seq 1 20); do
+  kubectl --context "kind-$CLUSTER_NAME" -n default get statefulset seed-rbac-test-postgres >/dev/null 2>&1 && break
+  sleep 2
+done
+echo "    ok, db-composer-rbac.yaml applied, StatefulSet composition now unblocked"
+
+echo "==> 11. seeded failure 3 of 3: StatefulSet-incompatible readiness check must reproduce the real error"
+python3 - <<'PY'
+p = "solution/db-composition.yaml"
+out = "/tmp/m10-seed-readiness.yaml"
+text = open(p).read()
+old = """            connectionDetails:
+              - type: FromValue
+                name: ready
+                value: "true"
+            readinessChecks:
+              - type: None
+"""
+new = """            connectionDetails:
+              - type: FromValue
+                name: ready
+                value: "true"
+            readinessChecks:
+              - type: MatchInteger
+                fieldPath: status.readyReplicas
+                matchInteger: 1
+"""
+assert old in text, "expected readinessChecks block not found in db-composition.yaml"
+open(out, "w").write(text.replace(old, new))
+PY
+[ -f /tmp/m10-seed-readiness.yaml ] || fail "could not generate seeded readiness-check composition"
+kubectl --context "kind-$CLUSTER_NAME" apply -f /tmp/m10-seed-readiness.yaml >/dev/null || fail "seeded readiness composition apply"
+kubectl --context "kind-$CLUSTER_NAME" apply -f - >/dev/null <<'EOF' || fail "seed-readiness-test xr apply"
+apiVersion: platform.m10.example.org/v1alpha1
+kind: XDatabase
+metadata:
+  name: seed-readiness-test
+  namespace: default
+spec:
+  dbName: seed_readiness_test
+  storageSize: 512Mi
+EOF
+FOUND=0
+for i in $(seq 1 20); do
+  TEXT=$(kubectl --context "kind-$CLUSTER_NAME" get events -n default --field-selector involvedObject.name=seed-readiness-test 2>/dev/null)
+  echo "$TEXT" | grep -q "not a (int64) number" && { FOUND=1; break; }
+  sleep 3
+done
+[ "$FOUND" = "1" ] || fail "seeded StatefulSet readiness-check bug did not reproduce the real 'not a (int64) number' error"
+echo "    ok, reproduced: cannot run readiness check at index 0: status.readyReplicas: not a (int64) number"
+kubectl --context "kind-$CLUSTER_NAME" delete xdatabase seed-readiness-test -n default >/dev/null 2>&1
+kubectl --context "kind-$CLUSTER_NAME" apply -f solution/db-composition.yaml >/dev/null || fail "restore shipped composition after seed 3"
+rm -f /tmp/m10-seed-readiness.yaml
+echo "    ok, shipped composition (readinessChecks: type None) restored"
+
+echo "==> 12. layer three: request a database as one namespaced XR, no Helm values, no claim"
 kubectl --context "kind-$CLUSTER_NAME" apply -f solution/db-composer-rbac.yaml >/dev/null || fail "db-composer-rbac apply"
 kubectl --context "kind-$CLUSTER_NAME" apply -f solution/db-composition.yaml >/dev/null || fail "db-composition apply"
 kubectl --context "kind-$CLUSTER_NAME" apply -f solution/db-xr.yaml >/dev/null || fail "db-xr apply"
@@ -84,10 +211,19 @@ for i in $(seq 1 30); do
   sleep 5
 done
 [ "$SYNCED" = "True" ] && [ "$READY" = "True" ] || fail "XDatabase billing never went Synced+Ready"
-kubectl --context "kind-$CLUSTER_NAME" -n default exec billing-postgres-0 -- psql -U appuser -d billing_service -c "SELECT 1;" >/dev/null || fail "crossplane-composed postgres not queryable"
+# XR Ready only means Crossplane finished composing, not that the postgres process inside the
+# pod has started accepting connections, the composition's own readinessChecks are type: None
+# (seed 3, above). Poll the real container the same way LAB.md says to: kubectl / a real query,
+# not the XR's own status field.
+QUERYABLE=0
+for i in $(seq 1 12); do
+  kubectl --context "kind-$CLUSTER_NAME" -n default exec billing-postgres-0 -- psql -U appuser -d billing_service -c "SELECT 1;" >/dev/null 2>&1 && { QUERYABLE=1; break; }
+  sleep 5
+done
+[ "$QUERYABLE" = "1" ] || fail "crossplane-composed postgres not queryable"
 echo "    ok, XDatabase composed a real StatefulSet+Service+Secret, real postgres queryable"
 
-echo "==> 9. teardown"
+echo "==> 13. teardown"
 kubectl --context "kind-$CLUSTER_NAME" delete -f solution/db-xr.yaml >/dev/null || fail "db-xr delete"
 GC_DONE=0
 for i in $(seq 1 20); do
@@ -101,4 +237,4 @@ docker ps -a --filter "name=$CLUSTER_NAME" --format '{{.Names}}' | grep -q "$CLU
 echo "    ok, XR and composed resource gone, cluster deleted, no orphans"
 
 echo
-echo "LAB PASSED -- real kind cluster, real crossplane v2.4.0, a database-as-a-service capability delivered three real ways: raw manifests, a Helm chart, and a namespaced Crossplane XR, teardown clean"
+echo "LAB PASSED -- real kind cluster, real crossplane v2.4.0, a database-as-a-service capability delivered three real ways: raw manifests, a Helm chart, and a namespaced Crossplane XR, all 3 real seeded failures reproduced and fixed, teardown clean"
