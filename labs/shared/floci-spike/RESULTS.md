@@ -50,7 +50,7 @@ and call out the failure mode in the troubleshooting section.**
 
 - **Pin `floci/floci:1.7.0`.** Nightlies ship daily; `latest` is a moving target mid-course.
 - **Budget ~4 minutes for a full apply+destroy cycle.** RDS takes ~2–3 minutes to create — real container pull plus MySQL init. Pre-pull `mysql:8.0` and
-  `amazonlinux:2023` in the devcontainer so the lab doesn't stall on a download.
+  `amazonlinux:2023` on your host so the lab doesn't stall on a download.
 - **Use the `endpoints {}` block, not `endpoint_url`.** Floci's README shows `endpoint_url`, which is
   not AWS-provider syntax. The working stub is `labs/shared/floci-spike/provider.tf`.
 - **AMI ids are synthetic.** Fine for teaching the data-source pattern, which is what M03 and M07 need.
