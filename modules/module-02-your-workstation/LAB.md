@@ -572,7 +572,7 @@ Done. main.tf now:
 - `local_file.about_html` → `/usr/share/nginx/html/about.html`, real content about it being a
   Terraform lab.
 - `local_file.healthz_conf` → nginx conf snippet, mounted `/etc/nginx/conf.d/healthz.conf`,
-  `location = /healthz { return 200 'ok'; }` — answers from memory, no disk read per request
+  `location = /healthz { return 200 'ok'; }`, answers from memory, no disk read per request
 ```
 
 That's a real, captured response. First, check what `acceptEdits` didn't skip: **read** the new
@@ -652,8 +652,8 @@ found, in 5 lines or fewer." --permission-mode acceptEdits --allowedTools "Read,
 ```
 Audit done, read-only.
 
-- checkov: blocked — Bash perms denied agent. Run yourself: checkov -d .
-- abspath check: all 3 local_file resources consistent — filename = abspath("${path.module}/...")
+- checkov: blocked, Bash perms denied agent. Run yourself: checkov -d .
+- abspath check: all 3 local_file resources consistent, filename = abspath("${path.module}/...")
   at lines 33, 50, 74. No violators.
 - Matters here: docker provider needs absolute host paths, so pattern is load-bearing not style.
 ```
@@ -704,7 +704,7 @@ All 4 steps pass.
 - fmt -check -diff: clean, no diff
 - init: success, providers installed
 - validate: "Success! The configuration is valid."
-- plan: 5 to add, 0 change, 0 destroy — clean plan
+- plan: 5 to add, 0 change, 0 destroy, clean plan
 ```
 
 A real, captured run. `.claude/commands/` is project-scoped, checked into the repo alongside the
