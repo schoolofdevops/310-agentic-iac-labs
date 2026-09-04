@@ -1,7 +1,7 @@
 # Project 01: Build an Nginx Module Using Terraform and Checkov
 
 **Tier 0** · ~12 min · no agent, no cloud account, no `terraform apply`. Just Terraform and
-Checkov, both already in the devcontainer.
+Checkov, both installed on your host, see Environment Setup.
 
 In this project, you will write a small Terraform module by hand, against a one-line intent,
 then run it through the same generate-verify-fix loop an agent runs later in this course:
@@ -17,8 +17,8 @@ format, validate, plan, scan, fix. No agent yet, just you and the loop.
 
 ## Pre Requisites
 
-- Nothing from a later module. `terraform` and `checkov` ship in the base devcontainer
-  image, and Docker is already reachable at `/var/run/docker.sock`. Check that with:
+- Nothing from a later module. `terraform` and `checkov` are installed on your host per
+  Environment Setup, and Docker is reachable at `/var/run/docker.sock`. Check that with:
 
 ```
 docker info

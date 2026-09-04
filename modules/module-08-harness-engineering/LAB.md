@@ -24,7 +24,7 @@ assembles a skill and a hook into one harness.
 ## Pre Requisites
 
 - Docker reachable at `/var/run/docker.sock`. Check with `docker info`
-- `terraform` and `checkov` available (base devcontainer image)
+- `terraform` and `checkov` on your `PATH`, installed per Environment Setup
 
 ## Stage 1: Assemble a verification-before-claiming harness
 

@@ -22,7 +22,7 @@ human watching it.
 ## Pre Requisites
 
 - `terraform` and `checkov`, same as every earlier Tier 0/1 project in this course
-- `python3` and `PyYAML` (already available in the devcontainer) to validate the trigger config
+- `python3` and `PyYAML` (installed per Environment Setup) to validate the trigger config
 
 ## The starter module
 

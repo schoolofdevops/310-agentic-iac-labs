@@ -10,7 +10,7 @@ private authoring repo; this one holds only what you run.
 ## Quick start
 
 ```
-# open in VS Code -> Reopen in Container, then:
+# install the pinned tools on your host first, see the course site's Environment Setup page, then:
 docker compose -f labs/shared/docker-compose.floci.yml up -d
 cd labs/shared/floci-spike && ./run.sh
 ```
@@ -20,8 +20,7 @@ Lab tiers 0–2 cost nothing and need no cloud account. Tier 3 is optional, caps
 ## What's here
 
 ```
-.devcontainer/              pinned tool versions: terraform, opentofu, trivy, checkov, kind, helm, kubectl
-labs/shared/                devcontainer-adjacent lab infrastructure (Floci spike, docker-compose)
+labs/shared/                shared lab infrastructure (Floci spike, docker-compose)
 modules/module-01-clickops-to-agents/
   LAB.md                    Lab 1: Be the Agent (Tier 0, ~12 min)
   lab/starter/               skeleton you copy and adapt, deliberately fails a checkov scan
