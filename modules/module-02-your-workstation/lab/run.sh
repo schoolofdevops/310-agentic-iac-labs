@@ -2,7 +2,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 
-echo "==> devcontainer prerequisites reachable"
+echo "==> pinned-tool prerequisites reachable"
 terraform version >/dev/null 2>&1 || fail "terraform not on PATH"
 checkov --version >/dev/null 2>&1 || fail "checkov not on PATH"
 docker info >/dev/null 2>&1 || fail "docker not reachable"

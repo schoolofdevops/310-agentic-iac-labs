@@ -1,7 +1,7 @@
 # Project 02: Build an Nginx Test Module Using Claude Code's Agent Modes
 
 **Tier 0** · ~15 min · no cloud account, no `terraform apply` required. Claude Code (or Codex),
-Terraform, and Checkov, all already in the devcontainer.
+Terraform, and Checkov, all installed on your host per Environment Setup.
 
 In this project, you will build one real thing: a local nginx test module, a container that
 serves a static page you control, its rendered HTML kept on disk so you can diff it in git,
@@ -16,7 +16,7 @@ hand to the agent, and how much permission it runs with.
 - A preview of plan mode on a throwaway file, before the real thing lands in M04
 - The module extended under `acceptEdits` while you watch, applied and destroyed for real
 - A bounded audit delegated to a subagent, its narrower permissions doing their job
-- This module's own check floor turned into a one-word slash command
+- This module's own set of required checks turned into a one-word slash command
 
 M01 had you run a generate-verify-fix loop by hand, no agent involved. This project hands the
 first half of that loop, just the generating, to a real agent, on the same intent, so you feel
@@ -178,8 +178,7 @@ cd ~/m02-lab/step1-suggested
 `file: ~/m02-lab/step1-suggested/main.tf`
 
 Copy the block above into this file, however you'd normally do that, paste it, redirect the
-agent's raw output into it with `> main.tf`, whatever's fastest for you. Then run the syntax
-floor from M01 on it:
+agent's raw output into it with `> main.tf`, whatever's fastest for you. Then run the same basic checks from M01 on it:
 
 ```
 terraform fmt -check -diff
@@ -224,7 +223,7 @@ terraform validate
 Success! The configuration is valid.
 ```
 
-**`terraform validate` is not the whole floor.** It checks types and syntax, not every constraint a
+**`terraform validate` alone is not enough.** It checks types and syntax, not every constraint a
 provider enforces once it actually has to act on your values. Run `terraform plan` on this same
 file:
 
@@ -304,7 +303,7 @@ intent directly. Do not ask questions, just write the file. Intent: <paste the i
 ```
 
 **Read** `main.tf` before you do anything else with it, the same discipline M01's `terraform
-plan` step asked for. Then run the same syntax floor:
+plan` step asked for. Then run the same basic checks:
 
 ```
 terraform fmt -check -diff
@@ -318,7 +317,7 @@ Success! The configuration is valid.
 ```
 
 Validated clean on the first try. Before you call that "no fix needed," remember step 1's
-lesson: validate isn't the floor, plan is. Run it:
+lesson: validate is not enough, plan catches more. Run it:
 
 ```
 terraform plan
@@ -604,7 +603,7 @@ result, not a guarantee for yours. Confirm it in your own output before you trus
 one more thing static checks can't tell you: nginx only auto-loads `/etc/nginx/conf.d/*.conf`
 files at the point they're `include`d inside its own `http` block, and a bare `location` block
 dropped in there has to make sense in that context. `terraform plan` has no opinion on nginx's
-config grammar, only Terraform's. **Apply this for real** in your devcontainer, where Docker is
+config grammar, only Terraform's. **Apply this for real** on your machine, where Docker is
 reachable, and curl all three paths:
 
 ```
@@ -666,7 +665,7 @@ permissions. That is by design, and module 6 turns it into a formal gate.
 
 ## Step 6: Custom Slash Command
 
-One last thing the project's own repo can carry: its own check floor, as a command anyone
+One last thing the project's own repo can carry: its own required checks, as a command anyone
 opening it can run. You've now typed `fmt`, `init`, `validate`, `plan` by hand four times in
 this lab. A custom slash
 command turns a sequence you run often into one word. **Create** this file:
@@ -674,7 +673,7 @@ command turns a sequence you run often into one word. **Create** this file:
 `file: ~/m02-lab/step3-acceptedits/.claude/commands/tf-check.md`
 ```
 ---
-description: Run this course's Terraform syntax + plan floor (fmt, validate, plan) against the current directory
+description: Run this course's Terraform checks (fmt, validate, plan) against the current directory
 ---
 
 Run, in order, in the current directory, and report the real output of each:
@@ -709,7 +708,7 @@ All 4 steps pass.
 
 A real, captured run. `.claude/commands/` is project-scoped, checked into the repo alongside the
 module it belongs to, so anyone (or any agent) working in this directory gets the same
-one-word floor you just built. That's the last real dial this module teaches: slash commands
+one-word check you just built. That's the last real dial this module teaches: slash commands
 turn a repeatable check into a fact the repo carries, not a sequence you re-type or re-explain
 every session.
 
@@ -719,7 +718,7 @@ Write a short note, in your own words, in a file called `notes.md` next to your 
 
 - What felt different between typing step 1's suggestion and reading step 2's draft?
 - Both step 1 and step 2 validated clean and still failed `terraform plan`. What does that tell
-  you about where you should actually set your own floor, on a real repo, not a lab?
+  you about which checks you should actually require, on a real repo, not a lab?
 - What did you find when you actually applied `step3-acceptedits` and curled `/healthz`? Write
   the real result, whatever it was.
 - The subagent's checkov call got blocked by its own permissions. Why is that the right default,
@@ -758,7 +757,7 @@ What you built:
 
 - One project, the local nginx test module, built five times over: typed as a suggestion,
   written as a draft, extended under `acceptEdits` while you watched, audited by a subagent,
-  and given its own one-word check floor
+  and given its own one-word check
 - A real bug, caught twice, independently, by two different agent sessions: `terraform
   validate` never saw it, only `terraform plan` did
 - A bounded audit delegated to a subagent, its narrower permissions doing their job instead of
