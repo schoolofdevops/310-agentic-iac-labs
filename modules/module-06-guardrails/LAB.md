@@ -66,12 +66,10 @@ guardrail, the provider's own. A lot of teams turn `force_destroy` on precisely 
 from failing CI, and the moment they do, the provider's own guardrail is gone. What's left to
 stand between an agent and a real object being destroyed for good is exactly what this lab builds.
 
-**Copy** the lab into a scratch directory and **start** Floci, same Tier 1 setup every lab in
-this course uses:
+**Move** into the lab and **start** Floci, same Tier 1 setup every lab in this course uses:
 
 ```
-cp -r modules/module-06-guardrails/lab ~/m06-lab
-cd ~/m06-lab
+cd modules/module-06-guardrails/lab
 docker run -d --name floci -p 4566:4566 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   floci/floci:1.7.0

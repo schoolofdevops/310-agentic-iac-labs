@@ -74,12 +74,12 @@ way an agent would:
 
 ### Step 1: Run once with no context
 
-**Copy** the no-context starter into a scratch directory, with nothing else in
-it:
+**Copy** the no-context starter into its own run folder, so run 2 later still
+gets an untouched starter to work from:
 
 ```
-cp -r modules/module-03-context-engineering/lab/starter ~/m03-run1
-cd ~/m03-run1
+cp -r modules/module-03-context-engineering/lab/starter modules/module-03-context-engineering/lab/run1
+cd modules/module-03-context-engineering/lab/run1
 ```
 
 **Open** Claude Code (or Codex) in that directory and give it the exact intent
@@ -93,7 +93,7 @@ claude -p "Give me a local nginx container for testing, serving a static page I 
 This is what came back, captured for real, with no `AGENTS.md` anywhere in the
 folder:
 
-`file: ~/m03-run1/main.tf`
+`file: run1/main.tf`
 ```
 variable "log_shipper_key" {
   description = "AWS key for the sidecar that ships nginx access logs to S3"
@@ -128,7 +128,7 @@ wrote down: secrets never get a `default`.
 Now **write** the file that was missing. This is the actual deliverable of
 this stage:
 
-`file: ~/m03-run1/AGENTS.md`
+`file: run1/AGENTS.md`
 ```
 # AGENTS.md, m03-lab
 
@@ -167,16 +167,16 @@ Keep it short. A file nobody reads is worse than no file at all.
 
 ### Step 3: Run again with context
 
-`cp` a fresh copy of the starter next to your new `AGENTS.md`, in a folder
-that now has that file in it:
+Back at the repo root, `cp` a fresh copy of the starter into a second run
+folder, then carry over the `AGENTS.md` you just wrote:
 
 ```
-cp -r modules/module-03-context-engineering/lab/starter ~/m03-run2
-cp ~/m03-run1/AGENTS.md ~/m03-run2/AGENTS.md
-cd ~/m03-run2
+cp -r modules/module-03-context-engineering/lab/starter modules/module-03-context-engineering/lab/run2
+cp modules/module-03-context-engineering/lab/run1/AGENTS.md modules/module-03-context-engineering/lab/run2/AGENTS.md
+cd modules/module-03-context-engineering/lab/run2
 ```
 
-**Open** Claude Code (or Codex) in `~/m03-run2` and give it the exact same
+**Open** Claude Code (or Codex) in `run2` and give it the exact same
 intent as Step 1:
 
 ```
@@ -256,11 +256,12 @@ picked up mid-fix by a session that never saw run 1 happen.
 next action, not a vague TODO:
 
 ```
-mkdir -p ~/m03-route && cd ~/m03-route
-cp modules/module-03-context-engineering/lab/starter/main.tf .
+mkdir -p modules/module-03-context-engineering/lab/route
+cp modules/module-03-context-engineering/lab/starter/main.tf modules/module-03-context-engineering/lab/route/
+cd modules/module-03-context-engineering/lab/route
 ```
 
-`file: ~/m03-route/STATE.md`
+`file: route/STATE.md`
 ```
 ## Where this stands
 main.tf has one open finding: var.log_shipper_key carries a hardcoded default.
@@ -281,7 +282,7 @@ confirm exit 0.
 next command starts with genuinely zero memory of what you just did:
 
 ```
-cd ~/m03-route
+cd modules/module-03-context-engineering/lab/route
 claude -p "Read STATE.md in this directory and do exactly what it says. Nothing else." \
   --allowedTools "Read,Write,Edit,Bash" --permission-mode acceptEdits
 ```

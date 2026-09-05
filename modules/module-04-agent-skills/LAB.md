@@ -50,11 +50,11 @@ means the skill sits there, written, correct, and never triggered.
 
 ### Step 2: Run with no skill available
 
-Copy the starter into a scratch directory, with no `.claude/skills/` anywhere in it:
+Copy the starter into its own run folder, with no `.claude/skills/` anywhere in it:
 
 ```
-cp -r modules/module-04-agent-skills/lab/starter ~/m04-run1
-cd ~/m04-run1
+cp -r modules/module-04-agent-skills/lab/starter modules/module-04-agent-skills/lab/run1
+cd modules/module-04-agent-skills/lab/run1
 ```
 
 **Open** Claude Code (or Codex) in that directory and give it this exact prompt, no skill
@@ -67,7 +67,7 @@ claude -p "Give me a small S3 bucket for build artifacts, with a credential for 
 
 This is what came back, captured for real, with no skill in the folder:
 
-`file: ~/m04-run1/main.tf`
+`file: run1/main.tf`
 ```
 variable "artifact_uploader_key" {
   description = "AWS key for the sidecar that uploads build artifacts to S3"
@@ -110,6 +110,13 @@ scanners. This skill is scoped to three things: provider pins, required tags, an
 
 ### Step 3: Write the skill
 
+Back in `modules/module-04-agent-skills/lab` (this skill belongs to the lab, not to one run
+folder, so both runs can find it):
+
+```
+cd ..
+```
+
 **Write** the skill that was missing. This is the actual deliverable of this stage:
 
 `file: .claude/skills/terraform-module-conventions/SKILL.md`
@@ -147,16 +154,17 @@ skill goes unused.
 
 ### Step 4: Run with the skill available
 
-Copy a fresh starter and put the skill next to it:
+Still in `modules/module-04-agent-skills/lab`, copy a fresh starter into a second run
+folder and put the skill next to it:
 
 ```
-cp -r modules/module-04-agent-skills/lab/starter ~/m04-run2
-mkdir -p ~/m04-run2/.claude/skills
-cp -r .claude/skills/terraform-module-conventions ~/m04-run2/.claude/skills/
-cd ~/m04-run2
+cp -r starter run2
+mkdir -p run2/.claude/skills
+cp -r .claude/skills/terraform-module-conventions run2/.claude/skills/
+cd run2
 ```
 
-**Open** Claude Code (or Codex) in `~/m04-run2` and give it the exact same prompt as Step 2:
+**Open** Claude Code (or Codex) in `run2` and give it the exact same prompt as Step 2:
 
 ```
 claude -p "Give me a small S3 bucket for build artifacts, with a credential for the uploader sidecar that ships them there." \

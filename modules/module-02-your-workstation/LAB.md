@@ -171,11 +171,11 @@ practice: the agent never touched a file, you're the one moving its answer into 
 same way you'd copy a suggestion out of a chat window or a code review comment:
 
 ```
-mkdir -p ~/m02-lab/step1-suggested
-cd ~/m02-lab/step1-suggested
+mkdir -p modules/module-02-your-workstation/lab/step1-suggested
+cd modules/module-02-your-workstation/lab/step1-suggested
 ```
 
-`file: ~/m02-lab/step1-suggested/main.tf`
+`file: main.tf`
 
 Copy the block above into this file, however you'd normally do that, paste it, redirect the
 agent's raw output into it with `> main.tf`, whatever's fastest for you. Then run the same basic checks from M01 on it:
@@ -201,7 +201,7 @@ The suggestion doesn't validate. `path.module` isn't available inside a `variabl
 suggestion doesn't make it correct, it makes it **yours to have caught**. **Fix** it to a plain
 relative path:
 
-`edit file: ~/m02-lab/step1-suggested/main.tf`
+`edit file: main.tf`
 ```
 variable "site_dir" {
   description = "Path to local dir with static HTML you author/edit"
@@ -248,7 +248,7 @@ the actual create, and `terraform validate` never evaluates. Your file validated
 still have failed the moment anyone tried to plan or apply it. **Fix** it by wrapping the
 reference in `abspath()` at the point Docker actually needs it:
 
-`edit file: ~/m02-lab/step1-suggested/main.tf`
+`edit file: main.tf`
 ```
   volumes {
     host_path      = abspath(var.site_dir)
@@ -283,7 +283,7 @@ permission prompt appears asking to write `main.tf`, **approve** it. That's the 
 mechanism, you didn't need a flag, you just said yes at the prompt instead of no:
 
 ```
-mkdir -p ~/m02-lab/step2-drafted && cd ~/m02-lab/step2-drafted
+mkdir -p modules/module-02-your-workstation/lab/step2-drafted && cd modules/module-02-your-workstation/lab/step2-drafted
 claude
 ```
 ```
@@ -340,7 +340,7 @@ on `local_file.index_html`, and that resource's `filename` feeds straight into t
 failure, because neither the model nor `terraform validate` catches Docker's absolute-path
 requirement. **Fix** it the same way, wrapping the reference in `abspath()`:
 
-`edit file: ~/m02-lab/step2-drafted/main.tf`
+`edit file: main.tf`
 ```
 resource "local_file" "index_html" {
   filename = abspath("${path.module}/html/index.html")
@@ -374,7 +374,7 @@ the mode indicator at the bottom of the prompt reads `plan mode`, then ask it a 
 thing:
 
 ```
-mkdir -p ~/m02-lab/plan-preview && cd ~/m02-lab/plan-preview
+mkdir -p modules/module-02-your-workstation/lab/plan-preview && cd modules/module-02-your-workstation/lab/plan-preview
 claude
 ```
 ```
@@ -521,8 +521,8 @@ hand twice.
 ## Check both with checkov
 
 ```
-cd ~/m02-lab/step1-suggested && checkov -d .
-cd ~/m02-lab/step2-drafted && checkov -d .
+cd modules/module-02-your-workstation/lab/step1-suggested && checkov -d .
+cd ../step2-drafted && checkov -d .
 ```
 
 `[ Expected output ]`
@@ -543,7 +543,7 @@ turn, in the transcript. **Open** a fresh session in a copy of your fixed `step2
 and press **Shift+Tab** until the mode indicator reads `accept edits`:
 
 ```
-cp -r ~/m02-lab/step2-drafted ~/m02-lab/step3-acceptedits && cd ~/m02-lab/step3-acceptedits
+cp -r modules/module-02-your-workstation/lab/step2-drafted modules/module-02-your-workstation/lab/step3-acceptedits && cd modules/module-02-your-workstation/lab/step3-acceptedits
 claude
 ```
 ```
@@ -670,7 +670,7 @@ opening it can run. You've now typed `fmt`, `init`, `validate`, `plan` by hand f
 this lab. A custom slash
 command turns a sequence you run often into one word. **Create** this file:
 
-`file: ~/m02-lab/step3-acceptedits/.claude/commands/tf-check.md`
+`file: .claude/commands/tf-check.md`
 ```
 ---
 description: Run this course's Terraform checks (fmt, validate, plan) against the current directory

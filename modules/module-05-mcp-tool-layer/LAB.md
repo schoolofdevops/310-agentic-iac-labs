@@ -168,16 +168,17 @@ this module. Module 1 used Checkov to catch a hardcoded secret. This module has 
 usage anywhere so far, and `aws_db_instance` gives you a different kind of misconfiguration
 to catch, one attribute controlling whether the database is encrypted at rest.
 
-**Copy** the module's `.tf` files into a scratch directory and seed the same mistake a rushed
-edit makes, turn storage encryption off. You're still in `lab/module` from the apply above:
+**Copy** the module's `.tf` files into a sibling scratch folder and seed the same mistake a
+rushed edit makes, turn storage encryption off. You're still in `lab/module` from the apply
+above:
 
 ```
-mkdir -p ~/m05-scratch
-cp *.tf ~/m05-scratch/
-cd ~/m05-scratch
+mkdir -p ../scratch
+cp *.tf ../scratch/
+cd ../scratch
 ```
 
-`edit file: ~/m05-scratch/db.tf`
+`edit file: db.tf`
 ```
   storage_encrypted       = false
 ```
@@ -206,7 +207,7 @@ reading the database's settings after the fact.
 
 **Fix** it, put the attribute back:
 
-`edit file: ~/m05-scratch/db.tf`
+`edit file: db.tf`
 ```
   storage_encrypted       = true
 ```

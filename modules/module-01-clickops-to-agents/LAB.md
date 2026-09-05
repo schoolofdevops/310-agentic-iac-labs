@@ -37,15 +37,14 @@ Here's the one-line prompt. Read it the way an agent would, as the only instruct
 
 ## Step 1: Get the starter module
 
-A skeleton is already written for you. This isn't a Terraform syntax course yet; it's a
-verification-loop course. **Copy** it into your own working directory:
+A skeleton is already written for you, right here in the repo you cloned. This isn't a
+Terraform syntax course yet; it's a verification-loop course. **Move** into it:
 
 ```
-cp -r modules/module-01-clickops-to-agents/lab/starter ~/m01-lab
-cd ~/m01-lab
+cd modules/module-01-clickops-to-agents/lab/starter
 ```
 
-`file: ~/m01-lab/main.tf`
+`file: main.tf`
 ```
 terraform {
   required_providers {
@@ -105,7 +104,7 @@ Read it against the intent above before you run anything. It's a fair reading of
 static page, kept on disk, a container that stays local. There's also a `log_shipper_key`
 variable that isn't part of the intent at all. Keep that in mind; you'll come back to it.
 
-## Step 2: Check the syntax floor
+## Step 2: Check the Syntax
 
 **Format** the module first. This is the cheapest check there is, and it says nothing about
 whether the code is good, only whether it's readable:
@@ -221,7 +220,7 @@ The fix isn't to delete the feature. The log shipper is a real requirement. It's
 the key into the module. Pull the `default` out of the variable and mark it `sensitive`, so the
 value has to come from the environment instead:
 
-`edit file: ~/m01-lab/main.tf`
+`edit file: main.tf`
 ```
 variable "log_shipper_key" {
   description = "AWS key for the sidecar that ships nginx access logs to S3. Set via TF_VAR_log_shipper_key, never a default."

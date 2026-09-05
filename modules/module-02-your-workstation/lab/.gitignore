@@ -2,3 +2,7 @@
 .terraform.lock.hcl
 *.tfstate
 *.tfstate.*
+step1-suggested/
+step2-drafted/
+step3-acceptedits/
+plan-preview/

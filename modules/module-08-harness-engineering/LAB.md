@@ -31,12 +31,10 @@ assembles a skill and a hook into one harness.
 ### Step 1: Get the starter module
 
 ```
-cp -r modules/module-08-harness-engineering/lab/starter ~/m08-lab
-cp -r modules/module-08-harness-engineering/lab/hooks ~/m08-lab/hooks
-cd ~/m08-lab
+cd modules/module-08-harness-engineering/lab
 ```
 
-`file: ~/m08-lab/starter/main.tf`
+`file: starter/main.tf`
 ```
 resource "aws_s3_bucket" "artifacts" {
   bucket = "m08-lab-artifacts"
@@ -49,7 +47,7 @@ resource "aws_s3_bucket" "artifacts" {
 
 ### Step 2: Watch an unbacked claim slip through
 
-**Open** Claude Code (or Codex) in `~/m08-lab` and give it this exact prompt:
+**Open** Claude Code (or Codex) in this directory and give it this exact prompt:
 
 ```
 claude -p "Review the S3 bucket in starter/main.tf and tell me if it's clean and ready to ship." \
@@ -81,7 +79,7 @@ reaching you. That's the failure this project fixes.
 
 ### Step 3: Write the skill that states the rule
 
-`file: ~/m08-lab/.claude/skills/verify-before-claiming/SKILL.md`
+`file: .claude/skills/verify-before-claiming/SKILL.md`
 ```
 ---
 name: verify-before-claiming
@@ -97,7 +95,7 @@ actually stops it.
 
 ### Step 4: Write the hook that enforces it
 
-`file: ~/m08-lab/hooks/verify_claim.sh`
+`file: hooks/verify_claim.sh`
 ```
 CLAIM_RE='(checkov (passes|is clean|clean)|tests? pass(es)?|it works|this works|is clean now|no (more )?findings)'
 EVIDENCE_RE='(Passed checks: [0-9]+, Failed checks: [0-9]+|Check: CKV|exit code:? *0|\$ checkov)'
@@ -150,11 +148,11 @@ pass is whether the evidence was actually there.
 
 ### Step 6: Fix the bucket, apply, and destroy
 
-`edit file: ~/m08-lab/starter/main.tf`, add versioning and a public access block (or copy
-`lab/solution/main.tf`), then confirm the two targeted findings are gone:
+`edit file: starter/main.tf`, add versioning and a public access block (or copy
+`solution/main.tf`), then confirm the two targeted findings are gone:
 
 ```
-checkov -d . --compact --quiet
+checkov -d starter --compact --quiet
 ```
 
 `[ Expected output ]`
@@ -170,8 +168,8 @@ it was told to enforce, same lesson as M07's spec-scope.
 **Apply** and **destroy** against Floci, the real thing, not a claim about it:
 
 ```
-terraform apply -auto-approve
-terraform destroy -auto-approve
+terraform -chdir=starter apply -auto-approve
+terraform -chdir=starter destroy -auto-approve
 ```
 
 ## Stage 2: Prove test-first, RED before GREEN
@@ -180,8 +178,6 @@ The second superpowers discipline. The iron law: no fix without a failing test f
 failing for the right reason, before you write a single line of the fix.
 
 ```
-cd ~/m08-lab
-cp -r modules/module-08-harness-engineering/lab/tdd .
 cd tdd
 ```
 
@@ -247,9 +243,7 @@ you're about to see why it's flagged.
 ### Step 1: Reproduce the real bug
 
 ```
-cd ~/m08-lab
-cp -r modules/module-08-harness-engineering/lab/debug .
-cd debug
+cd ../debug
 terraform init -backend=false -input=false >/dev/null
 terraform validate
 ```

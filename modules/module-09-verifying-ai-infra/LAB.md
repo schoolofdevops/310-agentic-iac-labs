@@ -68,14 +68,13 @@ your own machine.
 
 ## Step 2: Run Trivy and Checkov
 
-**Copy** the lab module into your own working directory, same pattern as every lab since M01:
+**Move** into the lab module, same pattern as every lab since M01:
 
 ```
-cp -r modules/module-09-verifying-ai-infra/lab ~/m09-lab
-cd ~/m09-lab
+cd modules/module-09-verifying-ai-infra/lab
 ```
 
-`file: ~/m09-lab/module/main.tf` is a small, two-bucket module, deliberately unhardened.
+`file: module/main.tf` is a small, two-bucket module, deliberately unhardened.
 **Scan** it with both tools:
 
 ```
@@ -110,7 +109,7 @@ would have missed this finding entirely.
 Your org has one rule neither Trivy nor Checkov can ever check: every `aws_s3_bucket` must
 carry an `Owner` tag. **Write** it as a real OPA policy:
 
-`file: ~/m09-lab/policy/required_tags.rego`
+`file: policy/required_tags.rego`
 ```
 package main
 
@@ -144,7 +143,7 @@ FAIL - /tmp/plan.json - main - aws_s3_bucket.reports has no Owner tag: every aws
 `Exit code 1`. `aws_s3_bucket.reports` has no tags at all in the starter module; `backups`
 already does. **Fix**, re-plan, re-check:
 
-`file: ~/m09-lab/solution/main.tf` already has this fixed, both buckets carry
+`file: solution/main.tf` already has this fixed, both buckets carry
 `Owner = "m09-lab"`. Point `conftest` at the solution's plan instead and it passes clean,
 `1 test, 1 passed, 0 warnings, 0 failures, 0 exceptions`.
 

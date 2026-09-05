@@ -3,3 +3,5 @@
 *.tfstate
 *.tfstate.*
 *.tfplan
+run1/
+run2/
